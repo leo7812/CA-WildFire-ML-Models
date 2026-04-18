@@ -1,0 +1,56 @@
+task: segmentation
+tiled_inference_on_testing: false
+tiled_inference_on_validation: false
+plot_on_val: 10
+path_to_record_metrics: null
+model_args:
+  backbone: prithvi_eo_v2_300
+  backbone_pretrained: true
+  backbone_num_frames: 1
+  backbone_bands:
+  - BLUE
+  - GREEN
+  - RED
+  - NIR_NARROW
+  - SWIR_1
+  - SWIR_2
+  backbone_coords_encoding: []
+  necks:
+  - name: SelectIndices
+    indices:
+    - 5
+    - 11
+    - 17
+    - 23
+  - name: ReshapeTokensToImage
+    effective_time_dim: 1
+  - name: LearnedInterpolateToPyramidal
+  decoder: UNetDecoder
+  decoder_channels:
+  - 256
+  - 128
+  - 64
+  - 32
+  head_dropout: 0.1
+  num_classes: 2
+model_factory: EncoderDecoderFactory
+model: null
+loss: ce
+aux_heads: null
+aux_loss: null
+class_weights: null
+ignore_index: -1
+lr: 0.0001
+optimizer: AdamW
+optimizer_hparams: null
+scheduler: null
+scheduler_hparams: null
+freeze_backbone: true
+freeze_decoder: false
+freeze_head: false
+class_names: null
+tiled_inference_parameters: null
+test_dataloaders_names: null
+lr_overrides: null
+output_on_inference: prediction
+output_most_probable: true
