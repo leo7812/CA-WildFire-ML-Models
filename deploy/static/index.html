@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Wildfire Spread Predictor</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Bebas+Neue&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -140,34 +141,80 @@
     margin-bottom: 0.75rem;
   }
 
-  /* ── Tile selector ── */
-  .tile-grid {
-    display: grid;
-    grid-template-columns: repeat(8, 1fr);
-    gap: 4px;
+  /* ── Leaflet map ── */
+  #map {
+    height: 280px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--bg3);
+    z-index: 1;
   }
 
-  .tile-btn {
-    background: var(--bg2);
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    padding: 6px 4px;
+  /* Leaflet dark-theme overrides */
+  .leaflet-control-zoom a {
+    background: var(--bg2) !important;
+    color: var(--text) !important;
+    border-color: var(--border) !important;
+  }
+  .leaflet-control-zoom a:hover {
+    background: var(--bg3) !important;
+    color: var(--fire) !important;
+  }
+  .leaflet-bar { border: none !important; box-shadow: none !important; }
+  .leaflet-control-zoom { border: 1px solid var(--border) !important; border-radius: 3px !important; overflow: hidden; }
+  .leaflet-control-attribution {
+    background: rgba(10, 11, 13, 0.85) !important;
+    color: var(--text-dim) !important;
+    font-size: 8px !important;
+    padding: 1px 5px !important;
+  }
+  .leaflet-control-attribution a { color: var(--text-dim) !important; }
+
+  /* coords bar below the map */
+  .coords-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 6px;
+    padding: 0 2px;
+  }
+  .coords-hint {
     font-family: var(--mono);
     font-size: 9px;
     color: var(--text-dim);
-    cursor: pointer;
-    text-align: center;
-    transition: all 0.15s;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.04em;
+  }
+  .coords-val {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--fire);
+    letter-spacing: 0.04em;
   }
 
-  .tile-btn:hover { border-color: var(--fire-mid); color: var(--text-mid); }
-  .tile-btn.active { border-color: var(--fire); color: var(--fire); background: var(--fire-dim); }
+  /* map error toast */
+  .map-toast {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 500;
+    background: var(--bg2);
+    border: 1px solid var(--bad);
+    border-radius: 4px;
+    padding: 8px 14px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--bad);
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    animation: fadein 0.2s ease;
+    pointer-events: none;
+  }
 
   /* ── Image panels ── */
   .img-row {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 8px;
   }
 
@@ -233,7 +280,7 @@
   /* ── Metrics ── */
   .metrics-row {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 8px;
   }
 
@@ -272,34 +319,7 @@
   .metric-val.warn { color: var(--warn); }
   .metric-val.bad  { color: var(--bad); }
 
-  /* ── Prob heatmap ── */
-  .prob-panel {
-    background: var(--bg2);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    overflow: hidden;
-  }
-
-  .prob-panel img {
-    width: 100%;
-    height: 140px;
-    object-fit: cover;
-    display: block;
-    image-rendering: pixelated;
-    background: var(--bg3);
-  }
-
-  .prob-footer {
-    padding: 8px 12px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-top: 1px solid var(--border);
-  }
-
   /* ── Risk bar ── */
-  .risk-section { }
-
   .risk-bar-wrap {
     position: relative;
     height: 6px;
@@ -396,26 +416,6 @@
 
   input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
 
-  .slider-track {
-    height: 2px;
-    background: var(--border);
-    border-radius: 1px;
-    position: relative;
-    overflow: hidden;
-    margin-top: -8px;
-    pointer-events: none;
-  }
-
-  .slider-fill {
-    position: absolute;
-    left: 0;
-    top: 0;
-    height: 100%;
-    background: var(--fire);
-    border-radius: 1px;
-    transition: width 0.1s;
-  }
-
   /* ── Predict button ── */
   .predict-btn {
     width: 100%;
@@ -445,8 +445,8 @@
   .predict-btn:hover::after { opacity: 0.1; }
   .predict-btn:active { transform: scale(0.98); }
   .predict-btn:disabled { background: var(--bg3); color: var(--text-dim); cursor: not-allowed; }
+  .predict-btn:disabled::after { display: none; }
 
-  /* loading state */
   .predict-btn.loading {
     background: var(--bg3);
     color: var(--text-dim);
@@ -478,8 +478,9 @@
     background: var(--bg2);
   }
 
-  .status-bar.ok { color: var(--good); border-color: var(--good); }
-  .status-bar.err { color: var(--bad); border-color: var(--bad); }
+  .status-bar.ok  { color: var(--good); border-color: var(--good); }
+  .status-bar.err { color: var(--bad);  border-color: var(--bad); }
+  .status-bar.loading { color: var(--warn); border-color: var(--warn); }
 
   /* ── Footer info ── */
   .info-block {
@@ -523,30 +524,31 @@
   <div class="left-panel">
 
     <div>
-      <div class="section-label">Validation tile</div>
-      <div class="tile-grid" id="tile-grid"></div>
+      <div class="section-label" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+        <span>Select location in California</span>
+        <span class="coords-val" id="coords-display">—</span>
+      </div>
+      <div style="position:relative;">
+        <div id="map"></div>
+        <div class="map-toast" id="map-toast" style="display:none;"></div>
+      </div>
+      <div class="coords-bar">
+        <span class="coords-hint">Click anywhere in California to set inference location</span>
+      </div>
     </div>
 
     <div>
       <div class="section-label">Satellite imagery + predictions</div>
-      <div class="img-row">
+      <div class="img-row" id="img-row">
         <div class="img-panel">
-          <div class="img-placeholder" id="ph-rgb"><div class="img-placeholder-icon"></div></div>
+          <div class="img-placeholder" id="ph-rgb"><div class="img-placeholder-icon" style="animation:none;border-top-color:var(--border);"></div></div>
           <img id="img-rgb" style="display:none">
           <div class="img-label">
             <span class="img-label-text">Input RGB</span>
           </div>
         </div>
-        <div class="img-panel">
-          <div class="img-placeholder" id="ph-gt"><div class="img-placeholder-icon"></div></div>
-          <img id="img-gt" style="display:none">
-          <div class="img-label">
-            <span class="img-label-text">Ground truth</span>
-            <span class="img-label-val" id="lbl-actual">—</span>
-          </div>
-        </div>
         <div class="img-panel accent">
-          <div class="img-placeholder" id="ph-mask"><div class="img-placeholder-icon"></div></div>
+          <div class="img-placeholder" id="ph-mask"><div class="img-placeholder-icon" style="animation:none;border-top-color:var(--border);"></div></div>
           <img id="img-mask" style="display:none">
           <div class="img-label">
             <span class="img-label-text">Predicted mask</span>
@@ -554,7 +556,7 @@
           </div>
         </div>
         <div class="img-panel">
-          <div class="img-placeholder" id="ph-prob"><div class="img-placeholder-icon"></div></div>
+          <div class="img-placeholder" id="ph-prob"><div class="img-placeholder-icon" style="animation:none;border-top-color:var(--border);"></div></div>
           <img id="img-prob" style="display:none">
           <div class="img-label">
             <span class="img-label-text">Burn probability</span>
@@ -567,29 +569,24 @@
       <div class="section-label">Prediction metrics</div>
       <div class="metrics-row">
         <div class="metric">
-          <div class="metric-label">Predicted</div>
+          <div class="metric-label">Predicted burn</div>
           <div class="metric-val" id="m-pred">—</div>
-          <div class="metric-unit">acres burned</div>
+          <div class="metric-unit">acres</div>
         </div>
         <div class="metric">
-          <div class="metric-label">Actual</div>
-          <div class="metric-val" id="m-actual">—</div>
-          <div class="metric-unit">acres burned</div>
+          <div class="metric-label">Peak burn prob</div>
+          <div class="metric-val" id="m-prob">—</div>
+          <div class="metric-unit">highest pixel %</div>
         </div>
         <div class="metric">
-          <div class="metric-label">Error</div>
-          <div class="metric-val" id="m-error">—</div>
-          <div class="metric-unit">size prediction</div>
-        </div>
-        <div class="metric">
-          <div class="metric-label">Tile</div>
-          <div class="metric-val" id="m-tile" style="font-size:14px; padding-top:4px; font-family: var(--mono);">—</div>
-          <div class="metric-unit">selected</div>
+          <div class="metric-label">Tile date</div>
+          <div class="metric-val" id="m-date" style="font-size:16px;padding-top:6px;font-family:var(--mono);">—</div>
+          <div class="metric-unit">acquisition</div>
         </div>
       </div>
     </div>
 
-    <div class="risk-section">
+    <div>
       <div class="section-label">Fire risk index</div>
       <div class="risk-bar-wrap">
         <div class="risk-pointer" id="risk-pointer" style="left: 10%;"></div>
@@ -657,47 +654,100 @@
       </div>
     </div>
 
-    <button class="predict-btn" id="predict-btn" onclick="runPrediction()">
+    <button class="predict-btn" id="predict-btn" onclick="runPrediction()" disabled>
       RUN PREDICTION
     </button>
 
     <div class="status-bar" id="status-bar">
-      READY — select a tile and click predict
+      READY — click a location on the map to begin
     </div>
 
     <div class="info-block">
       <span>model</span> Prithvi-EO-2.0-300M<br>
       <span>weights</span> wildfire_weather_weights.pt<br>
       <span>inference</span> CPU · Cloud Run<br>
-      <span>dataset</span> HLS burn scars · 540 tiles<br>
-      <span>mean error</span> 4.3% on validation set
+      <span>data source</span> NASA HLS Sentinel-2 · live<br>
+      <span>cloud cover</span> &lt;10% threshold · 180d window
     </div>
 
   </div>
 </main>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script>
-const state = { tile: 0, temp: 85, wind: 10, trange: 20, lwind: 6, wtr: 0.12 };
+// ── State ─────────────────────────────────────────────────────────────
+const state = {
+  lat: null, lon: null,
+  temp: 85, wind: 10, trange: 20, lwind: 6, wtr: 0.12,
+};
 
-// Build tile buttons
-const tileGrid = document.getElementById('tile-grid');
-for (let i = 0; i < 8; i++) {
-  const btn = document.createElement('button');
-  btn.className = 'tile-btn' + (i === 0 ? ' active' : '');
-  btn.textContent = 'T0' + (i + 1);
-  btn.onclick = () => {
-    document.querySelectorAll('.tile-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    state.tile = i;
-    document.getElementById('m-tile').textContent = 'T0' + (i + 1);
-  };
-  tileGrid.appendChild(btn);
+// ── Leaflet map ───────────────────────────────────────────────────────
+const CA_BOUNDS = L.latLngBounds([[32.5, -124.5], [42.0, -114.0]]);
+
+const map = L.map('map', {
+  center: [37.5, -119.5],
+  zoom: 6,
+  maxBounds: CA_BOUNDS,
+  maxBoundsViscosity: 1.0,
+  minZoom: 5,
+  maxZoom: 14,
+  zoomControl: true,
+});
+
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
+  subdomains: 'abcd',
+  maxZoom: 20,
+}).addTo(map);
+
+// Fire-flame marker matching the logo
+const fireIcon = L.divIcon({
+  html: '<div style="width:24px;height:24px;background:#ff4d1a;clip-path:polygon(50% 0%,80% 30%,100% 60%,70% 100%,30% 100%,0% 60%,20% 30%);animation:pulse-fire 2s ease-in-out infinite;box-shadow:0 0 10px #ff4d1a88;"></div>',
+  className: '',
+  iconSize:   [24, 24],
+  iconAnchor: [12, 12],
+});
+
+let marker = null;
+let toastTimer = null;
+
+function showMapToast(msg) {
+  const el = document.getElementById('map-toast');
+  el.textContent = msg;
+  el.style.display = 'block';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.style.display = 'none'; }, 4000);
 }
 
+map.on('click', (e) => {
+  const { lat, lng } = e.latlng;
+
+  if (!CA_BOUNDS.contains(e.latlng)) {
+    showMapToast('Out of bounds — click within California');
+    return;
+  }
+
+  state.lat = lat;
+  state.lon = lng;
+
+  document.getElementById('coords-display').textContent =
+    lat.toFixed(4) + '°N  ' + Math.abs(lng).toFixed(4) + '°W';
+
+  if (marker) {
+    marker.setLatLng(e.latlng);
+  } else {
+    marker = L.marker(e.latlng, { icon: fireIcon }).addTo(map);
+  }
+
+  document.getElementById('predict-btn').disabled = false;
+  setStatus('LOCATION SET · Click RUN PREDICTION to fetch live HLS tile', '');
+});
+
+// ── Weather sliders ───────────────────────────────────────────────────
 function updateSlider(key, val, unit, min, max) {
   val = parseFloat(val);
   state[key] = val;
-  const disp = key === 'wtr' ? parseFloat(val).toFixed(2) : Math.round(val);
+  const disp = key === 'wtr' ? val.toFixed(2) : Math.round(val);
   document.getElementById('v-' + key).textContent = disp + unit;
   updateRisk();
 }
@@ -708,6 +758,14 @@ function updateRisk() {
   document.getElementById('risk-pointer').style.left = pct + '%';
 }
 
+// ── Status bar ────────────────────────────────────────────────────────
+function setStatus(msg, cls) {
+  const el = document.getElementById('status-bar');
+  el.className = 'status-bar' + (cls ? ' ' + cls : '');
+  el.textContent = msg;
+}
+
+// ── Image helpers ─────────────────────────────────────────────────────
 function setImg(id, phId, b64) {
   const img = document.getElementById(id);
   const ph  = document.getElementById(phId);
@@ -718,77 +776,111 @@ function setImg(id, phId, b64) {
 }
 
 function showLoading() {
-  ['rgb','gt','mask','prob'].forEach(k => {
-    document.getElementById('img-' + k).style.display = 'none';
-    document.getElementById('ph-' + k).style.display = 'flex';
+  ['rgb', 'mask', 'prob'].forEach(k => {
+    const img = document.getElementById('img-' + k);
+    const ph  = document.getElementById('ph-' + k);
+    img.style.display = 'none';
+    // restore spinner style
+    ph.innerHTML = '<div class="img-placeholder-icon"></div>';
+    ph.style.display = 'flex';
   });
 }
 
+// ── Prediction ────────────────────────────────────────────────────────
 async function runPrediction() {
-  const btn = document.getElementById('predict-btn');
-  const status = document.getElementById('status-bar');
+  if (state.lat === null) return;
 
+  const btn = document.getElementById('predict-btn');
   btn.disabled = true;
   btn.classList.add('loading');
-  btn.innerHTML = '<span class="spinner"></span>RUNNING INFERENCE...';
-  status.className = 'status-bar';
-  status.textContent = 'RUNNING · Prithvi-EO-2.0 inference on CPU...';
+  btn.innerHTML = '<span class="spinner"></span>FETCHING HLS TILE...';
+  setStatus('QUERYING NASA STAC · searching for cloud-free tile...', 'loading');
   showLoading();
 
+  // Reset metrics
+  ['m-pred', 'm-prob', 'm-date'].forEach(id => {
+    document.getElementById(id).textContent = '—';
+    document.getElementById(id).className = 'metric-val';
+  });
+  document.getElementById('lbl-pred').textContent = '—';
+
   try {
-    const res = await fetch('/predict', {
+    const res = await fetch('/predict_live', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        tile_index:      state.tile,
+        lat:             state.lat,
+        lon:             state.lon,
         max_temp:        state.temp,
         wind_speed:      state.wind,
         temp_range:      state.trange,
         lagged_wind:     state.lwind,
         wind_temp_ratio: state.wtr,
-      })
+      }),
     });
 
-    if (!res.ok) throw new Error('Inference failed: ' + res.status);
     const data = await res.json();
 
-    // Update images
+    if (!res.ok) {
+      const detail = (data.detail || '').toString();
+      if (detail.includes('no_clear_tile')) {
+        setStatus('NO CLOUD-FREE TILE · Try another location or different season', 'err');
+        showMapToast('No cloud-free tile found.\nTry clicking another location.');
+      } else {
+        setStatus('ERROR · ' + detail.substring(0, 60), 'err');
+      }
+      ['rgb', 'mask', 'prob'].forEach(k => {
+        const ph = document.getElementById('ph-' + k);
+        ph.innerHTML = '<span style="font-size:9px;color:var(--text-dim);font-family:var(--mono)">—</span>';
+      });
+      return;
+    }
+
+    // Render images
     setImg('img-rgb',  'ph-rgb',  data.rgb_image);
-    setImg('img-gt',   'ph-gt',   data.gt_image);
     setImg('img-mask', 'ph-mask', data.mask_image);
     setImg('img-prob', 'ph-prob', data.prob_image);
 
-    // Update metrics
-    document.getElementById('m-pred').textContent   = data.predicted_acres.toLocaleString();
-    document.getElementById('m-actual').textContent = data.actual_acres.toLocaleString();
-    document.getElementById('lbl-pred').textContent   = data.predicted_acres.toLocaleString() + ' ac';
-    document.getElementById('lbl-actual').textContent = data.actual_acres.toLocaleString() + ' ac';
+    // Predicted acres — color-code by magnitude
+    const acres = data.predicted_acres;
+    const acresEl = document.getElementById('m-pred');
+    acresEl.textContent = acres.toLocaleString();
+    acresEl.className   = 'metric-val ' + (acres > 1000 ? 'bad' : acres > 100 ? 'warn' : '');
+    document.getElementById('lbl-pred').textContent = acres.toLocaleString() + ' ac';
 
-    const errEl = document.getElementById('m-error');
-    errEl.textContent = data.error_pct.toFixed(1) + '%';
-    errEl.className = 'metric-val ' + (data.error_pct < 5 ? 'good' : data.error_pct < 15 ? 'warn' : 'bad');
+    // Peak burn probability — color-code by risk level
+    const prob   = data.peak_prob ?? 0;
+    const probEl = document.getElementById('m-prob');
+    probEl.textContent = prob.toFixed(1) + '%';
+    probEl.className   = 'metric-val ' + (prob >= 50 ? 'bad' : prob >= 20 ? 'warn' : 'good');
 
-    document.getElementById('m-tile').textContent = 'T0' + (state.tile + 1);
+    // Tile metadata
+    document.getElementById('m-date').textContent = data.tile_date || '—';
 
-    status.className = 'status-bar ok';
-    status.textContent = 'COMPLETE · ' + data.tile_name.substring(0, 30);
+    // Wire risk bar to actual model output (peak_prob → 0-100 → position)
+    const riskPct = Math.min(Math.max(prob, 2), 96);
+    document.getElementById('risk-pointer').style.left = riskPct + '%';
+
+    setStatus(
+      'COMPLETE · ' + (data.tile_id || '') + ' · ' + (data.cloud_cover ?? '?') + '% cloud',
+      'ok',
+    );
 
   } catch (err) {
-    status.className = 'status-bar err';
-    status.textContent = 'ERROR · ' + err.message;
-    ['rgb','gt','mask','prob'].forEach(k => {
+    setStatus('ERROR · ' + err.message, 'err');
+    ['rgb', 'mask', 'prob'].forEach(k => {
       const ph = document.getElementById('ph-' + k);
       ph.innerHTML = '<span style="font-size:9px;color:var(--text-dim);font-family:var(--mono)">error</span>';
     });
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('loading');
+    btn.innerHTML = 'RUN PREDICTION';
   }
-
-  btn.disabled = false;
-  btn.classList.remove('loading');
-  btn.innerHTML = 'RUN PREDICTION';
 }
 
+// ── Init ──────────────────────────────────────────────────────────────
 updateRisk();
-document.getElementById('m-tile').textContent = 'T01';
 </script>
 </body>
 </html>
