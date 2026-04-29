@@ -842,11 +842,11 @@ async function runPrediction() {
     setImg('img-prob', 'ph-prob', data.prob_image);
 
     // Predicted acres — color-code by magnitude
-    const acres = data.predicted_acres;
+    const acres = data.predicted_acres ?? 0;
     const acresEl = document.getElementById('m-pred');
-    acresEl.textContent = acres.toLocaleString();
+    acresEl.textContent = acres > 0 ? acres.toLocaleString() : '< 1';
     acresEl.className   = 'metric-val ' + (acres > 1000 ? 'bad' : acres > 100 ? 'warn' : '');
-    document.getElementById('lbl-pred').textContent = acres.toLocaleString() + ' ac';
+    document.getElementById('lbl-pred').textContent = (acres > 0 ? acres.toLocaleString() : '< 1') + ' ac';
 
     // Peak burn probability — color-code by risk level
     const prob   = data.peak_prob ?? 0;

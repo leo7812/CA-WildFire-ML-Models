@@ -39,7 +39,7 @@ GDAL_AUTH_FILE  = '/tmp/gdal_auth.hdr'
 model = None
 
 @asynccontextmanager
-async def lifespan(_app: FastAPI):
+async def lifespan(_: FastAPI):
     global model
 
     # Weights from GCS
@@ -88,7 +88,7 @@ class LivePredictRequest(BaseModel):
 # ── STAC helpers ──────────────────────────────────────────────────────────────
 def _search_stac(lat: float, lon: float, days: int) -> list:
     """Return cloud-free HLSS30 items intersecting (lat, lon), newest first."""
-    end   = datetime.datetime.utcnow()
+    end   = datetime.datetime.now(datetime.timezone.utc)
     start = end - datetime.timedelta(days=days)
     dt    = f"{start.strftime('%Y-%m-%dT%H:%M:%SZ')}/{end.strftime('%Y-%m-%dT%H:%M:%SZ')}"
 
@@ -164,6 +164,17 @@ def _arr_to_b64(arr: np.ndarray) -> str:
     return base64.b64encode(buf.getvalue()).decode()
 
 
+def _mask_to_b64(mask: np.ndarray) -> str:
+    """Render binary mask with fire colormap: burned=orange, unburned=dark."""
+    h, w = mask.shape
+    rgb = np.full((h, w, 3), 17, dtype=np.uint8)  # dark background #111111
+    burned = mask > 0.5
+    rgb[burned] = [255, 77, 26]  # fire orange #ff4d1a
+    buf = io.BytesIO()
+    Image.fromarray(rgb).save(buf, format='PNG')
+    return base64.b64encode(buf.getvalue()).decode()
+
+
 # ── /predict_live ─────────────────────────────────────────────────────────────
 @app.post('/predict_live')
 async def predict_live(req: LivePredictRequest):
@@ -200,10 +211,12 @@ async def predict_live(req: LivePredictRequest):
     weather_norm   = np.nan_to_num((weather_raw - WEATHER_MEAN) / (WEATHER_STD + 1e-6), nan=0.0)
     weather_tensor = torch.tensor(weather_norm).unsqueeze(0)  # (1, 5)
 
+    BURN_THRESHOLD = 0.25  # flag pixels with >25% burn probability
+
     with torch.no_grad():
         logits = model(image_tensor, weather_tensor)
         probs  = logits.softmax(dim=1)[0, 1].numpy()   # (512, 512) burn probability
-        mask   = logits.argmax(dim=1)[0].numpy()        # (512, 512) binary mask
+        mask   = (probs > BURN_THRESHOLD).astype(np.int32)  # (512, 512) binary mask
 
     predicted_acres = float((mask == 1).sum() * 900 / 4047)
     peak_prob       = round(float(probs.max()) * 100, 1)   # highest burn probability in window (%)
@@ -226,7 +239,7 @@ async def predict_live(req: LivePredictRequest):
         'predicted_acres': round(predicted_acres),
         'peak_prob':       peak_prob,
         'rgb_image':       rgb_b64,
-        'mask_image':      _arr_to_b64(mask.astype(np.float32)),
+        'mask_image':      _mask_to_b64(mask.astype(np.float32)),
         'prob_image':      _arr_to_b64(probs),
         'tile_date':       tile_date,
         'tile_id':         mgrs,
