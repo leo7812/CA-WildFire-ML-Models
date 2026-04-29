@@ -1,0 +1,27 @@
+# Large data and model files
+checkpoints/
+data/hls_burn_scars/
+src.zip
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.env
+.venv
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+notebooks/lightning_logs/
+
+# macOS
+.DS_Store
+
+# Claude Code internal
+.claude/

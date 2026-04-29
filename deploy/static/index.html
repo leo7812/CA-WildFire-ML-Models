@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wildfire Spread Predictor</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Bebas+Neue&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --fire: #ff4d1a;
+    --fire-dim: #ff4d1a22;
+    --fire-mid: #ff4d1a55;
+    --bg: #0a0b0d;
+    --bg2: #111318;
+    --bg3: #181b22;
+    --border: #ffffff0f;
+    --border-lit: #ff4d1a33;
+    --text: #e8e6e0;
+    --text-dim: #6b6a66;
+    --text-mid: #9b9994;
+    --good: #22c55e;
+    --warn: #f59e0b;
+    --bad: #ef4444;
+    --mono: 'DM Mono', monospace;
+    --display: 'Bebas Neue', sans-serif;
+    --body: 'DM Sans', sans-serif;
+  }
+
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--body);
+    font-size: 14px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* grain overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 999;
+    opacity: 0.4;
+  }
+
+  /* ── Header ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 56px;
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 100;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .logo-mark {
+    width: 28px;
+    height: 28px;
+    background: var(--fire);
+    clip-path: polygon(50% 0%, 80% 30%, 100% 60%, 70% 100%, 30% 100%, 0% 60%, 20% 30%);
+    animation: pulse-fire 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-fire {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.8; transform: scale(0.95); }
+  }
+
+  .logo-text {
+    font-family: var(--display);
+    font-size: 20px;
+    letter-spacing: 0.08em;
+    color: var(--text);
+  }
+
+  .logo-text span { color: var(--fire); }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 3px 8px;
+    border: 1px solid var(--border-lit);
+    border-radius: 2px;
+    color: var(--fire);
+    letter-spacing: 0.06em;
+  }
+
+  .model-tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.04em;
+  }
+
+  /* ── Layout ── */
+  main {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 0;
+    height: calc(100vh - 56px);
+  }
+
+  /* ── Left panel ── */
+  .left-panel {
+    padding: 1.5rem 2rem;
+    overflow-y: auto;
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .section-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 0.75rem;
+  }
+
+  /* ── Tile selector ── */
+  .tile-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 4px;
+  }
+
+  .tile-btn {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 6px 4px;
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text-dim);
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s;
+    letter-spacing: 0.03em;
+  }
+
+  .tile-btn:hover { border-color: var(--fire-mid); color: var(--text-mid); }
+  .tile-btn.active { border-color: var(--fire); color: var(--fire); background: var(--fire-dim); }
+
+  /* ── Image panels ── */
+  .img-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+
+  .img-panel {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .img-panel.accent { border-color: var(--border-lit); }
+
+  .img-panel img {
+    width: 100%;
+    aspect-ratio: 1;
+    display: block;
+    object-fit: cover;
+    image-rendering: pixelated;
+    background: var(--bg3);
+  }
+
+  .img-placeholder {
+    width: 100%;
+    aspect-ratio: 1;
+    background: var(--bg3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .img-placeholder-icon {
+    width: 24px;
+    height: 24px;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    border-top-color: var(--fire);
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .img-label {
+    padding: 6px 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .img-label-text {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .img-label-val {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--fire);
+  }
+
+  /* ── Metrics ── */
+  .metrics-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+
+  .metric {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 12px 14px;
+  }
+
+  .metric-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 6px;
+  }
+
+  .metric-val {
+    font-family: var(--display);
+    font-size: 28px;
+    letter-spacing: 0.02em;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  .metric-unit {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+
+  .metric-val.good { color: var(--good); }
+  .metric-val.warn { color: var(--warn); }
+  .metric-val.bad  { color: var(--bad); }
+
+  /* ── Prob heatmap ── */
+  .prob-panel {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .prob-panel img {
+    width: 100%;
+    height: 140px;
+    object-fit: cover;
+    display: block;
+    image-rendering: pixelated;
+    background: var(--bg3);
+  }
+
+  .prob-footer {
+    padding: 8px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid var(--border);
+  }
+
+  /* ── Risk bar ── */
+  .risk-section { }
+
+  .risk-bar-wrap {
+    position: relative;
+    height: 6px;
+    background: linear-gradient(90deg, var(--good), var(--warn) 50%, var(--bad));
+    border-radius: 3px;
+    margin: 8px 0;
+  }
+
+  .risk-pointer {
+    position: absolute;
+    top: -5px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--text);
+    border: 2px solid var(--bg);
+    transform: translateX(-50%);
+    transition: left 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 0 8px var(--fire);
+  }
+
+  .risk-labels {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text-dim);
+    letter-spacing: 0.04em;
+  }
+
+  /* ── Right panel (controls) ── */
+  .right-panel {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    overflow-y: auto;
+    background: var(--bg);
+  }
+
+  .ctrl-section {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  /* ── Sliders ── */
+  .slider-group { display: flex; flex-direction: column; gap: 6px; }
+
+  .slider-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+
+  .slider-name {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-mid);
+    letter-spacing: 0.04em;
+  }
+
+  .slider-value {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--fire);
+    font-weight: 500;
+  }
+
+  input[type=range] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 2px;
+    background: var(--border);
+    border-radius: 1px;
+    outline: none;
+  }
+
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--fire);
+    cursor: pointer;
+    border: 2px solid var(--bg);
+    box-shadow: 0 0 6px var(--fire-mid);
+    transition: transform 0.1s;
+  }
+
+  input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+  .slider-track {
+    height: 2px;
+    background: var(--border);
+    border-radius: 1px;
+    position: relative;
+    overflow: hidden;
+    margin-top: -8px;
+    pointer-events: none;
+  }
+
+  .slider-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    background: var(--fire);
+    border-radius: 1px;
+    transition: width 0.1s;
+  }
+
+  /* ── Predict button ── */
+  .predict-btn {
+    width: 100%;
+    padding: 14px;
+    background: var(--fire);
+    border: none;
+    border-radius: 4px;
+    font-family: var(--display);
+    font-size: 18px;
+    letter-spacing: 0.1em;
+    color: white;
+    cursor: pointer;
+    transition: all 0.15s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .predict-btn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: white;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  .predict-btn:hover::after { opacity: 0.1; }
+  .predict-btn:active { transform: scale(0.98); }
+  .predict-btn:disabled { background: var(--bg3); color: var(--text-dim); cursor: not-allowed; }
+
+  /* loading state */
+  .predict-btn.loading {
+    background: var(--bg3);
+    color: var(--text-dim);
+    cursor: not-allowed;
+  }
+
+  .spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--fire);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+
+  /* ── Status bar ── */
+  .status-bar {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text-dim);
+    text-align: center;
+    letter-spacing: 0.04em;
+    padding: 6px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: var(--bg2);
+  }
+
+  .status-bar.ok { color: var(--good); border-color: var(--good); }
+  .status-bar.err { color: var(--bad); border-color: var(--bad); }
+
+  /* ── Footer info ── */
+  .info-block {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text-dim);
+    line-height: 1.7;
+    letter-spacing: 0.03em;
+  }
+
+  .info-block span { color: var(--text-mid); }
+
+  /* ── Animations ── */
+  @keyframes fadein {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .fadein { animation: fadein 0.3s ease forwards; }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-mark"></div>
+    <div class="logo-text">FIRE<span>CAST</span></div>
+  </div>
+  <div class="header-right">
+    <span class="model-tag">Prithvi-EO-2.0 · 315M params</span>
+    <span class="badge">LIVE INFERENCE</span>
+  </div>
+</header>
+
+<main>
+  <div class="left-panel">
+
+    <div>
+      <div class="section-label">Validation tile</div>
+      <div class="tile-grid" id="tile-grid"></div>
+    </div>
+
+    <div>
+      <div class="section-label">Satellite imagery + predictions</div>
+      <div class="img-row">
+        <div class="img-panel">
+          <div class="img-placeholder" id="ph-rgb"><div class="img-placeholder-icon"></div></div>
+          <img id="img-rgb" style="display:none">
+          <div class="img-label">
+            <span class="img-label-text">Input RGB</span>
+          </div>
+        </div>
+        <div class="img-panel">
+          <div class="img-placeholder" id="ph-gt"><div class="img-placeholder-icon"></div></div>
+          <img id="img-gt" style="display:none">
+          <div class="img-label">
+            <span class="img-label-text">Ground truth</span>
+            <span class="img-label-val" id="lbl-actual">—</span>
+          </div>
+        </div>
+        <div class="img-panel accent">
+          <div class="img-placeholder" id="ph-mask"><div class="img-placeholder-icon"></div></div>
+          <img id="img-mask" style="display:none">
+          <div class="img-label">
+            <span class="img-label-text">Predicted mask</span>
+            <span class="img-label-val" id="lbl-pred">—</span>
+          </div>
+        </div>
+        <div class="img-panel">
+          <div class="img-placeholder" id="ph-prob"><div class="img-placeholder-icon"></div></div>
+          <img id="img-prob" style="display:none">
+          <div class="img-label">
+            <span class="img-label-text">Burn probability</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Prediction metrics</div>
+      <div class="metrics-row">
+        <div class="metric">
+          <div class="metric-label">Predicted</div>
+          <div class="metric-val" id="m-pred">—</div>
+          <div class="metric-unit">acres burned</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Actual</div>
+          <div class="metric-val" id="m-actual">—</div>
+          <div class="metric-unit">acres burned</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Error</div>
+          <div class="metric-val" id="m-error">—</div>
+          <div class="metric-unit">size prediction</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Tile</div>
+          <div class="metric-val" id="m-tile" style="font-size:14px; padding-top:4px; font-family: var(--mono);">—</div>
+          <div class="metric-unit">selected</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="risk-section">
+      <div class="section-label">Fire risk index</div>
+      <div class="risk-bar-wrap">
+        <div class="risk-pointer" id="risk-pointer" style="left: 10%;"></div>
+      </div>
+      <div class="risk-labels">
+        <span>low</span>
+        <span>moderate</span>
+        <span>extreme</span>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="right-panel">
+
+    <div>
+      <div class="section-label">Weather conditions</div>
+      <div class="ctrl-section">
+
+        <div class="slider-group">
+          <div class="slider-header">
+            <span class="slider-name">MAX TEMPERATURE</span>
+            <span class="slider-value" id="v-temp">85°F</span>
+          </div>
+          <input type="range" min="50" max="115" value="85" step="1" id="s-temp"
+                 oninput="updateSlider('temp', this.value, '°F', 50, 115)">
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-header">
+            <span class="slider-name">WIND SPEED</span>
+            <span class="slider-value" id="v-wind">10 mph</span>
+          </div>
+          <input type="range" min="0" max="40" value="10" step="1" id="s-wind"
+                 oninput="updateSlider('wind', this.value, ' mph', 0, 40)">
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-header">
+            <span class="slider-name">TEMP RANGE</span>
+            <span class="slider-value" id="v-trange">20°F</span>
+          </div>
+          <input type="range" min="5" max="40" value="20" step="1" id="s-trange"
+                 oninput="updateSlider('trange', this.value, '°F', 5, 40)">
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-header">
+            <span class="slider-name">LAGGED WIND</span>
+            <span class="slider-value" id="v-lwind">6 mph</span>
+          </div>
+          <input type="range" min="0" max="20" value="6" step="1" id="s-lwind"
+                 oninput="updateSlider('lwind', this.value, ' mph', 0, 20)">
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-header">
+            <span class="slider-name">WIND / TEMP RATIO</span>
+            <span class="slider-value" id="v-wtr">0.12</span>
+          </div>
+          <input type="range" min="0" max="0.5" value="0.12" step="0.01" id="s-wtr"
+                 oninput="updateSlider('wtr', this.value, '', 0, 0.5)">
+        </div>
+
+      </div>
+    </div>
+
+    <button class="predict-btn" id="predict-btn" onclick="runPrediction()">
+      RUN PREDICTION
+    </button>
+
+    <div class="status-bar" id="status-bar">
+      READY — select a tile and click predict
+    </div>
+
+    <div class="info-block">
+      <span>model</span> Prithvi-EO-2.0-300M<br>
+      <span>weights</span> wildfire_weather_weights.pt<br>
+      <span>inference</span> CPU · Cloud Run<br>
+      <span>dataset</span> HLS burn scars · 540 tiles<br>
+      <span>mean error</span> 4.3% on validation set
+    </div>
+
+  </div>
+</main>
+
+<script>
+const state = { tile: 0, temp: 85, wind: 10, trange: 20, lwind: 6, wtr: 0.12 };
+
+// Build tile buttons
+const tileGrid = document.getElementById('tile-grid');
+for (let i = 0; i < 8; i++) {
+  const btn = document.createElement('button');
+  btn.className = 'tile-btn' + (i === 0 ? ' active' : '');
+  btn.textContent = 'T0' + (i + 1);
+  btn.onclick = () => {
+    document.querySelectorAll('.tile-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.tile = i;
+    document.getElementById('m-tile').textContent = 'T0' + (i + 1);
+  };
+  tileGrid.appendChild(btn);
+}
+
+function updateSlider(key, val, unit, min, max) {
+  val = parseFloat(val);
+  state[key] = val;
+  const disp = key === 'wtr' ? parseFloat(val).toFixed(2) : Math.round(val);
+  document.getElementById('v-' + key).textContent = disp + unit;
+  updateRisk();
+}
+
+function updateRisk() {
+  const score = (state.temp - 50) / 65 * 0.4 + state.wind / 40 * 0.4 + state.wtr / 0.5 * 0.2;
+  const pct = Math.min(Math.max(score * 100, 2), 96);
+  document.getElementById('risk-pointer').style.left = pct + '%';
+}
+
+function setImg(id, phId, b64) {
+  const img = document.getElementById(id);
+  const ph  = document.getElementById(phId);
+  img.src = 'data:image/png;base64,' + b64;
+  img.style.display = 'block';
+  img.classList.add('fadein');
+  ph.style.display = 'none';
+}
+
+function showLoading() {
+  ['rgb','gt','mask','prob'].forEach(k => {
+    document.getElementById('img-' + k).style.display = 'none';
+    document.getElementById('ph-' + k).style.display = 'flex';
+  });
+}
+
+async function runPrediction() {
+  const btn = document.getElementById('predict-btn');
+  const status = document.getElementById('status-bar');
+
+  btn.disabled = true;
+  btn.classList.add('loading');
+  btn.innerHTML = '<span class="spinner"></span>RUNNING INFERENCE...';
+  status.className = 'status-bar';
+  status.textContent = 'RUNNING · Prithvi-EO-2.0 inference on CPU...';
+  showLoading();
+
+  try {
+    const res = await fetch('/predict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tile_index:      state.tile,
+        max_temp:        state.temp,
+        wind_speed:      state.wind,
+        temp_range:      state.trange,
+        lagged_wind:     state.lwind,
+        wind_temp_ratio: state.wtr,
+      })
+    });
+
+    if (!res.ok) throw new Error('Inference failed: ' + res.status);
+    const data = await res.json();
+
+    // Update images
+    setImg('img-rgb',  'ph-rgb',  data.rgb_image);
+    setImg('img-gt',   'ph-gt',   data.gt_image);
+    setImg('img-mask', 'ph-mask', data.mask_image);
+    setImg('img-prob', 'ph-prob', data.prob_image);
+
+    // Update metrics
+    document.getElementById('m-pred').textContent   = data.predicted_acres.toLocaleString();
+    document.getElementById('m-actual').textContent = data.actual_acres.toLocaleString();
+    document.getElementById('lbl-pred').textContent   = data.predicted_acres.toLocaleString() + ' ac';
+    document.getElementById('lbl-actual').textContent = data.actual_acres.toLocaleString() + ' ac';
+
+    const errEl = document.getElementById('m-error');
+    errEl.textContent = data.error_pct.toFixed(1) + '%';
+    errEl.className = 'metric-val ' + (data.error_pct < 5 ? 'good' : data.error_pct < 15 ? 'warn' : 'bad');
+
+    document.getElementById('m-tile').textContent = 'T0' + (state.tile + 1);
+
+    status.className = 'status-bar ok';
+    status.textContent = 'COMPLETE · ' + data.tile_name.substring(0, 30);
+
+  } catch (err) {
+    status.className = 'status-bar err';
+    status.textContent = 'ERROR · ' + err.message;
+    ['rgb','gt','mask','prob'].forEach(k => {
+      const ph = document.getElementById('ph-' + k);
+      ph.innerHTML = '<span style="font-size:9px;color:var(--text-dim);font-family:var(--mono)">error</span>';
+    });
+  }
+
+  btn.disabled = false;
+  btn.classList.remove('loading');
+  btn.innerHTML = 'RUN PREDICTION';
+}
+
+updateRisk();
+document.getElementById('m-tile').textContent = 'T01';
+</script>
+</body>
+</html>
