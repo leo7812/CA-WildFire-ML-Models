@@ -253,6 +253,134 @@
     font-size: 15px;
   }
 
+  .home-section {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 32px;
+    min-height: 260px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .home-section h2 {
+    font-family: var(--display);
+    font-size: clamp(40px, 6vw, 72px);
+    letter-spacing: 0.06em;
+    color: var(--fire);
+    margin-bottom: 12px;
+    line-height: 0.95;
+  }
+
+  .home-section p {
+    color: var(--text-mid);
+    max-width: 800px;
+    line-height: 1.8;
+    font-size: 15px;
+    margin-bottom: 10px;
+  }
+
+  .home-section.page-hero {
+    min-height: 360px;
+  }
+
+  /* ── EDA sections ── */
+  .eda-hero {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 32px;
+    min-height: 300px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .eda-hero h1 {
+    font-family: var(--display);
+    font-size: clamp(44px, 7vw, 88px);
+    letter-spacing: 0.06em;
+    line-height: 0.95;
+    margin-bottom: 1rem;
+  }
+
+  .eda-hero h1 span {
+    color: var(--fire);
+  }
+
+  .eda-hero p {
+    color: var(--text-mid);
+    max-width: 900px;
+    line-height: 1.8;
+    font-size: 15px;
+  }
+
+  .eda-section {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 32px;
+    min-height: 520px;
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+    gap: 32px;
+    align-items: center;
+    overflow: visible;
+  }
+
+  .eda-section.reverse {
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  }
+
+  .eda-section.reverse .eda-image {
+    order: 2;
+  }
+
+  .eda-section.reverse .eda-text {
+    order: 1;
+  }
+
+  .eda-image {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    width: 100%;
+    min-height: 420px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .eda-image img {
+    width: 100%;
+    height: 100%;
+    max-height: 420px;
+    object-fit: contain;
+    display: block;
+  }
+
+  .eda-text {
+    min-width: 0;
+  }
+
+  .eda-text h2 {
+    font-family: var(--display);
+    font-size: clamp(34px, 4vw, 56px);
+    letter-spacing: 0.06em;
+    color: var(--fire);
+    margin-bottom: 12px;
+    line-height: 0.95;
+  }
+
+  .eda-text p {
+    color: var(--text-mid);
+    line-height: 1.8;
+    font-size: 15px;
+    max-width: 620px;
+  }
+
   .card-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -687,6 +815,25 @@
     .card-grid {
       grid-template-columns: 1fr;
     }
+
+    .eda-section,
+    .eda-section.reverse {
+      grid-template-columns: 1fr;
+      min-height: auto;
+    }
+
+    .eda-section.reverse .eda-image,
+    .eda-section.reverse .eda-text {
+      order: initial;
+    }
+
+    .eda-image {
+      min-height: 300px;
+    }
+
+    .eda-image img {
+      max-height: 300px;
+    }
   }
 </style>
 </head>
@@ -714,75 +861,84 @@
 <main>
 
   <section id="home" class="tab-page">
-    <div class="page-hero">
-      <h1>Wildfire Spread <span>Prediction</span></h1>
+    <div class="home-section page-hero">
+      <h1>About our <span>Project</span></h1>
       <p>
-        This project uses satellite imagery, weather variables, and a machine learning model
-        to estimate potential wildfire spread across California.
+        This project uses satellite imagery, weather variables, and a machine 
+        learning model to estimate potential wildfire spread across California.
+        Our goal is to predict the spread of wildfires, specifically in California,
+        and see how accurate the predictions are.
       </p>
     </div>
 
-    <div class="card-grid">
-      <div class="mini-card">
-        <h3>Purpose</h3>
-        <p>
-          The goal is to create an interactive system that can estimate wildfire risk from location,
-          weather, and satellite imagery.
-        </p>
-      </div>
+    <div class="home-section">
+      <h2>Data</h2>
+      <p>
+        For our data, we used CAL FIRE Historical Fire Perimeters. It contains 22,810
+        records, having a total of 21 columns. It gave us information about the containment
+        date as well as the GIS calculated acres.
+      </p>
+    </div>
 
-      <div class="mini-card">
-        <h3>Data</h3>
-        <p>
-          The project uses NASA HLS Sentinel-2 satellite imagery and weather variables connected
-          to wildfire spread.
-        </p>
-      </div>
-
-      <div class="mini-card">
-        <h3>Output</h3>
-        <p>
-          The app displays predicted burn area, peak burn probability, tile date, image masks,
-          and a fire risk index.
-        </p>
-      </div>
+    <div class="home-section">
+      <h2>Output</h2>
+      <p>
+        The app displays predicted burn area, peak burn probability, tile date, image masks,
+        and a fire risk index.
+      </p>
     </div>
   </section>
 
   <section id="eda" class="tab-page">
-    <div class="content-card">
-      <h2>Exploratory Data <span>Analysis</span></h2>
+    <div class="eda-hero">
+      <h1>Exploratory Data <span>Analysis</span></h1>
       <p>
-        The EDA section explains the patterns and relationships used to understand wildfire spread.
+        This section shows the patterns and relationships we explored before building
+        the wildfire spread predictor. Each visualization helps explain how environmental
+        and weather-based features may influence wildfire behavior.
       </p>
-      <ul>
-        <li>will add EDA</li>
-        <li> </li>
-        <li> </li>
-        <li> </li>
-        <li> </li>
-      </ul>
     </div>
 
-    <div class="card-grid">
-      <div class="mini-card">
-        <h3>add card</h3>
-        <p>
-          description
-        </p>
+    <div class="eda-section">
+      <div class="eda-image">
+        <img src="/static/weather_vs_fire_size.png" alt="">
       </div>
 
-      <div class="mini-card">
-        <h3>add card</h3>
+      <div class="eda-text">
+        <h2>Correlation Matrix</h2>
         <p>
-          description
+          We created a correlation matrix in order to see how strong the relationships are between the different
+          features and the fire size. 
         </p>
       </div>
+    </div>
 
-      <div class="mini-card">
-        <h3>add card</h3>
+    <div class="eda-section reverse">
+      <div class="eda-image">
+        <img src="/static/wind_vs_fire.png" alt="">
+      </div>
+
+      <div class="eda-text">
+        <h2>Wind Speed vs Fire Size</h2>
         <p>
-          description
+          This visualization gives us a better visual on the relationship between wind speed and fire size.
+          It is a common belief that higher wind speed means the fire will be bigger. However, from our data,
+          we can see that most of the fires are usually from when the wind speed is 6mph to 10 mph. Not only that,
+          but from our graph, from 6 mph to 8 mph, the fire with the biggest size is between these two wind speeds.
+        </p>
+      </div>
+    </div>
+
+    <div class="eda-section">
+      <div class="eda-image">
+        <img src="/static/temp_vs_rain.png" alt="">
+      </div>
+
+      <div class="eda-text">
+        <h2>Temperature vs Lagged Rainfall</h2>
+        <p>
+          This graph shows if having days without rain would affect fire size in the case where the temperature
+          goes high.
         </p>
       </div>
     </div>
@@ -951,12 +1107,11 @@
     <div class="content-card">
       <h2>Expected <span>Findings</span></h2>
       <p>
-        These are the findings this project is expected to support after testing different
-        weather inputs, locations, and satellite tiles.
+        Here are the questions/hypothesis we made ---.
       </p>
       <ul>
-        <li>will add findings</li>
-        <li> </li>
+        <li>Which environmental factors strongly influence the spread of wildfires the most?</li>
+        <li>How well will the model perform when analyzing different regions in California?</li>
         <li> </li>
         <li> </li>
         <li> </li>
