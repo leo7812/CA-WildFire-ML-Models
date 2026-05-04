@@ -848,8 +848,9 @@
   <nav class="tabs">
     <button class="tab-link" onclick="openTab('home', this)">Home</button>
     <button class="tab-link" onclick="openTab('eda', this)">EDA</button>
+    <button class="tab-link" onclick="openTab('analytical-methods', this)">Analytical Methods</button>
     <button class="tab-link active" onclick="openTab('fire-spread-predictor', this)">Fire Spread Predictor</button>
-    <button class="tab-link" onclick="openTab('expected-findings', this)">Expected Findings</button>
+    <button class="tab-link" onclick="openTab('major-findings', this)">Major Findings</button>
   </nav>
 
   <div class="header-right">
@@ -862,7 +863,7 @@
 
   <section id="home" class="tab-page">
     <div class="home-section page-hero">
-      <h1>About our <span>Project</span></h1>
+      <h2>Project <span> Objective</span></h2>
       <p>
         This project uses satellite imagery, weather variables, and a machine 
         learning model to estimate potential wildfire spread across California.
@@ -877,14 +878,6 @@
         For our data, we used CAL FIRE Historical Fire Perimeters. It contains 22,810
         records, having a total of 21 columns. It gave us information about the containment
         date as well as the GIS calculated acres.
-      </p>
-    </div>
-
-    <div class="home-section">
-      <h2>Output</h2>
-      <p>
-        The app displays predicted burn area, peak burn probability, tile date, image masks,
-        and a fire risk index.
       </p>
     </div>
   </section>
@@ -937,7 +930,7 @@
       <div class="eda-text">
         <h2>Temperature vs Lagged Rainfall</h2>
         <p>
-          This graph shows if having days without rain would affect fire size in the case where the temperature
+          This graph gives us more information if having days without rain would affect fire size in the case where the temperature
           goes high.
         </p>
       </div>
@@ -1103,14 +1096,14 @@
 
   </section>
 
-  <section id="expected-findings" class="tab-page">
+  <section id="major-findings" class="tab-page">
     <div class="content-card">
-      <h2>Expected <span>Findings</span></h2>
+      <h2>Major <span> Findings</span></h2>
       <p>
         Here are the questions/hypothesis we made ---.
       </p>
       <ul>
-        <li>Which environmental factors strongly influence the spread of wildfires the most?</li>
+        <li>Which environmental factors strongly influence the spread of wildfires?</li>
         <li>How well will the model perform when analyzing different regions in California?</li>
         <li> </li>
         <li> </li>
@@ -1120,14 +1113,14 @@
 
     <div class="card-grid">
       <div class="mini-card">
-        <h3>add card</h3>
+        <h3>Which environmental factors strongly influence the spread of wildfires?</h3>
         <p>
           description
         </p>
       </div>
 
       <div class="mini-card">
-        <h3>add card</h3>
+        <h3>How well will the model perform when analyzing different regions in California?</h3>
         <p>
           description
         </p>
