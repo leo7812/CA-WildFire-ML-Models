@@ -881,6 +881,18 @@
         dataset contains 14,988 entries with 14 columns.
       </p>
     </div>
+
+    <div class="home-section">
+      <h2>California <span style="color:var(--fire)">Wildfire Days</span> per Year</h2>
+      <p style="margin-bottom:1rem;">
+        Number of days per year on which a wildfire was recorded in California (1984–2025),
+        sourced from our BigQuery dataset.
+      </p>
+      <div style="position:relative;height:260px;">
+        <canvas id="fire-chart"></canvas>
+      </div>
+      <p id="fire-chart-status" style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-top:6px;text-align:center;"></p>
+    </div>
   </section>
 
   <section id="eda" class="tab-page">
@@ -990,41 +1002,6 @@
         </div>
       </div>
 
-      <div>
-        <div class="section-label">Prediction metrics</div>
-        <div class="metrics-row">
-          <div class="metric">
-            <div class="metric-label">Predicted burn</div>
-            <div class="metric-val" id="m-pred">—</div>
-            <div class="metric-unit">acres</div>
-          </div>
-
-          <div class="metric">
-            <div class="metric-label">Peak burn prob</div>
-            <div class="metric-val" id="m-prob">—</div>
-            <div class="metric-unit">highest pixel %</div>
-          </div>
-
-          <div class="metric">
-            <div class="metric-label">Tile date</div>
-            <div class="metric-val" id="m-date" style="font-size:16px;padding-top:6px;font-family:var(--mono);">—</div>
-            <div class="metric-unit">acquisition</div>
-          </div>
-        </div>
-      </div>
-
-      <div>
-        <div class="section-label">Fire risk index</div>
-        <div class="risk-bar-wrap">
-          <div class="risk-pointer" id="risk-pointer" style="left: 10%;"></div>
-        </div>
-        <div class="risk-labels">
-          <span>low</span>
-          <span>moderate</span>
-          <span>extreme</span>
-        </div>
-      </div>
-
     </div>
 
     <div class="right-panel">
@@ -1081,12 +1058,45 @@
         </div>
       </div>
 
+      <div>
+        <div class="section-label">Fire risk index</div>
+        <div class="risk-bar-wrap">
+          <div class="risk-pointer" id="risk-pointer" style="left: 10%;"></div>
+        </div>
+        <div class="risk-labels">
+          <span>low</span>
+          <span>moderate</span>
+          <span>extreme</span>
+        </div>
+      </div>
+
       <button class="predict-btn" id="predict-btn" onclick="runPrediction()" disabled>
         RUN PREDICTION
       </button>
 
       <div class="status-bar" id="status-bar">
         READY — click a location on the map to begin
+      </div>
+
+      <div>
+        <div class="section-label">Prediction metrics</div>
+        <div class="metrics-row">
+          <div class="metric">
+            <div class="metric-label">Predicted burn</div>
+            <div class="metric-val" id="m-pred">—</div>
+            <div class="metric-unit">acres</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Peak burn prob</div>
+            <div class="metric-val" id="m-prob">—</div>
+            <div class="metric-unit">highest pixel %</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Tile date</div>
+            <div class="metric-val" id="m-date" style="font-size:16px;padding-top:6px;font-family:var(--mono);">—</div>
+            <div class="metric-unit">acquisition</div>
+          </div>
+        </div>
       </div>
 
       <div class="info-block">
@@ -1099,6 +1109,15 @@
 
     </div>
 
+  </section>
+
+  <section id="analytical-methods" class="tab-page">
+    <div class="content-card">
+      <h2>Analytical <span>Methods</span></h2>
+      <p>
+        Overview of the methods and models used to predict wildfire spread.
+      </p>
+    </div>
   </section>
 
   <section id="major-findings" class="tab-page">
@@ -1143,28 +1162,21 @@
 </main>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 // ── Tab navigation ────────────────────────────────────────────────────
 function openTab(tabId, clickedTab) {
-  const pages = document.querySelectorAll('.tab-page');
-  const tabs = document.querySelectorAll('.tab-link');
+  document.querySelectorAll('.tab-page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-link').forEach(t => t.classList.remove('active'));
 
-  pages.forEach(page => {
-    page.classList.remove('active');
-  });
-
-  tabs.forEach(tab => {
-    tab.classList.remove('active');
-  });
-
-  document.getElementById(tabId).classList.add('active');
+  const target = document.getElementById(tabId);
+  if (target) target.classList.add('active');
   clickedTab.classList.add('active');
 
   if (tabId === 'fire-spread-predictor') {
-    setTimeout(() => {
-      map.invalidateSize();
-    }, 100);
+    setTimeout(() => map.invalidateSize(), 100);
   }
+  if (tabId === 'home') loadFireChart();
 }
 
 // ── State ─────────────────────────────────────────────────────────────
@@ -1172,6 +1184,30 @@ const state = {
   lat: null, lon: null,
   temp: 85, wind: 10, trange: 20, lwind: 6, wtr: 0.12,
 };
+
+let _prefetchPollTimer = null;
+
+function _startPrefetchPoll(lat, lon) {
+  clearInterval(_prefetchPollTimer);
+  setStatus('FETCHING SATELLITE TILE · Run Prediction will start instantly once ready…', 'loading');
+  _prefetchPollTimer = setInterval(async () => {
+    try {
+      const r = await fetch('/prefetch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lat, lon }),
+      });
+      const d = await r.json();
+      if (d.status === 'cached') {
+        clearInterval(_prefetchPollTimer);
+        _prefetchPollTimer = null;
+        setStatus('TILE READY · Click Run Prediction', 'ok');
+      } else if (d.status === 'warming_up') {
+        setStatus('MODEL WARMING UP · Tile will fetch once model is ready…', 'loading');
+      }
+    } catch (_) {}
+  }, 3000);
+}
 
 // ── Leaflet map ───────────────────────────────────────────────────────
 const CA_BOUNDS = L.latLngBounds([[32.5, -124.5], [42.0, -114.0]]);
@@ -1231,7 +1267,7 @@ map.on('click', (e) => {
   }
 
   document.getElementById('predict-btn').disabled = false;
-  setStatus('LOCATION SET · Click RUN PREDICTION to fetch live HLS tile', '');
+  _startPrefetchPoll(lat, lng);
 });
 
 // ── Weather sliders ───────────────────────────────────────────────────
@@ -1280,6 +1316,9 @@ function showLoading() {
 async function runPrediction() {
   if (state.lat === null) return;
 
+  clearInterval(_prefetchPollTimer);
+  _prefetchPollTimer = null;
+
   const btn = document.getElementById('predict-btn');
   btn.disabled = true;
   btn.classList.add('loading');
@@ -1312,7 +1351,10 @@ async function runPrediction() {
 
     if (!res.ok) {
       const detail = (data.detail || '').toString();
-      if (detail.includes('no_clear_tile')) {
+      if (res.status === 503 || detail.toLowerCase().includes('not loaded') || detail.toLowerCase().includes('initializing')) {
+        setStatus('MODEL WARMING UP · Retrying in 15 seconds…', 'loading');
+        setTimeout(() => { if (state.lat !== null) runPrediction(); }, 15000);
+      } else if (detail.includes('no_clear_tile')) {
         setStatus('NO CLOUD-FREE TILE · Try another location or different season', 'err');
         showMapToast('No cloud-free tile found.\nTry clicking another location.');
       } else {
@@ -1368,6 +1410,76 @@ async function runPrediction() {
 
 // ── Init ──────────────────────────────────────────────────────────────
 updateRisk();
+
+// ── Fire stats chart (BigQuery) ───────────────────────────────────────
+let fireChart = null;
+
+async function loadFireChart() {
+  if (fireChart) return;
+  const status = document.getElementById('fire-chart-status');
+  status.textContent = 'Loading data from BigQuery...';
+  try {
+    const res  = await fetch('/api/fire_stats');
+    const data = await res.json();
+    const rows = data.fire_stats;
+
+    const labels  = rows.map(r => r.YEAR);
+    const values  = rows.map(r => r.fire_days);
+
+    fireChart = new Chart(document.getElementById('fire-chart'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Fire days',
+          data: values,
+          backgroundColor: '#ff4d1a55',
+          borderColor: '#ff4d1a',
+          borderWidth: 1,
+          borderRadius: 2,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#111318',
+            borderColor: '#ff4d1a33',
+            borderWidth: 1,
+            titleColor: '#e8e6e0',
+            bodyColor: '#9b9994',
+            titleFont: { family: "'DM Mono', monospace", size: 10 },
+            bodyFont:  { family: "'DM Mono', monospace", size: 10 },
+            callbacks: {
+              label: ctx => ` ${ctx.parsed.y} fire days`,
+            },
+          },
+        },
+        scales: {
+          x: {
+            ticks: { color: '#6b6a66', font: { family: "'DM Mono', monospace", size: 9 }, maxRotation: 45 },
+            grid:  { color: '#ffffff0f' },
+          },
+          y: {
+            ticks: { color: '#6b6a66', font: { family: "'DM Mono', monospace", size: 9 } },
+            grid:  { color: '#ffffff0f' },
+            title: { display: true, text: 'Days', color: '#6b6a66', font: { family: "'DM Mono', monospace", size: 9 } },
+          },
+        },
+      },
+    });
+    status.textContent = `${rows.length} years · source: BigQuery (sjsu-ds-projects.wildfire.ca_weather_fire)`;
+  } catch (err) {
+    status.textContent = 'Failed to load fire stats: ' + err.message;
+  }
+}
+
+// Load chart on first paint if home tab is the default active tab
+document.addEventListener('DOMContentLoaded', () => {
+  if (document.getElementById('home').classList.contains('active')) loadFireChart();
+});
 </script>
 </body>
 </html>

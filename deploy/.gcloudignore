@@ -1,0 +1,9 @@
+.gcloudignore
+.git
+.gitignore
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+tiles/
+*.ipynb
