@@ -23,3 +23,6 @@ notebooks/lightning_logs/
 # macOS
 .DS_Store
 
+# Utility scripts
+scripts/
+
