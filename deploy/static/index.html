@@ -877,7 +877,8 @@
       <p>
         For our data, we used CAL FIRE Historical Fire Perimeters. It contains 22,810
         records, having a total of 21 columns. It gave us information about the containment
-        date as well as the GIS calculated acres.
+        date as well as the GIS calculated acres. We also used Zenodo's weather data. The weather
+        dataset contains 14,988 entries with 14 columns.
       </p>
     </div>
   </section>
@@ -885,10 +886,11 @@
   <section id="eda" class="tab-page">
     <div class="eda-hero">
       <h1>Exploratory Data <span>Analysis</span></h1>
+      <h2>Preprocessing the Data</h2>
       <p>
-        This section shows the patterns and relationships we explored before building
-        the wildfire spread predictor. Each visualization helps explain how environmental
-        and weather-based features may influence wildfire behavior.
+        For our data, we combined two datasets together. The wildfire dataset contains information about fire incidents which includes
+        alarm date, containment date, fire name, and GIS calculated acres. The weather dataset has daily weather observations such as
+        precipitation, average wind speed, and maximum temperature.
       </p>
     </div>
 
@@ -901,7 +903,9 @@
         <h2>Correlation Matrix</h2>
         <p>
           We created a correlation matrix in order to see how strong the relationships are between the different
-          features and the fire size. 
+          features and the fire size. Based on the numbers, we can see that the correlation from weather features to
+          fire sizes is not high. This means that there is no linear relationship between weather and fire sizes. This
+          lets us know not to use a linear model.
         </p>
       </div>
     </div>
@@ -931,7 +935,8 @@
         <h2>Temperature vs Lagged Rainfall</h2>
         <p>
           This graph gives us more information if having days without rain would affect fire size in the case where the temperature
-          goes high.
+          goes high. It strengthen of the fire is more likely to start when the day has high temperature and is more dry after having
+          no rain.  
         </p>
       </div>
     </div>
