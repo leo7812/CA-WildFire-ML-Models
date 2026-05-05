@@ -42,7 +42,7 @@ uvicorn main:app --reload
    └── CA Weather & Fire CSV (CAL FIRE / NOAA) — daily records 1984–2025
 
 2. Data Storage
-   └── Weather/fire CSV → BigQuery via scripts/upload_to_bigquery.py
+   └── Weather/fire CSV → uploaded to BigQuery
 
 3. Model Training
    ├── src/train_colab.py — fine-tunes Prithvi-EO-2.0 on HLS burn scars
@@ -70,7 +70,6 @@ wildfire_project/
 ├── inference/      # Dockerized ML inference service deployed on Cloud Run
 ├── deploy/         # Web application deployed on App Engine Standard
 │   └── static/     # Single-page frontend (index.html)
-├── scripts/        # Utility scripts (e.g., BigQuery CSV upload)
 ├── notebooks/      # Exploratory data analysis
 ├── data/           # Local training data (not tracked in git)
 └── checkpoints/    # Model weight files (not tracked in git)
@@ -122,7 +121,7 @@ The service loads a fine-tuned **Prithvi-EO-2.0** (300M parameter geospatial fou
 
 **What:** Daily California weather and fire occurrence records, 1984–2025. Key fields: `MAX_TEMP`, `AVG_WIND_SPEED`, `LAGGED_AVG_WIND_SPEED`, `TEMP_RANGE`, `WIND_TEMP_RATIO`, `FIRE_START_DAY`.
 
-**How stored:** Uploaded from a local CSV via `scripts/upload_to_bigquery.py` into BigQuery table `sjsu-ds-projects.wildfire.ca_weather_fire`.
+**How stored:** Uploaded from a local CSV into BigQuery table `sjsu-ds-projects.wildfire.ca_weather_fire`.
 
 **How consumed:** Queried by the web app at startup and cached in memory. Rendered on the Home page as an interactive bar chart showing wildfire days per year (1984–2025).
 
