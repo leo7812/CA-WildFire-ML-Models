@@ -1,17 +1,17 @@
 # Training
-torch
-torchvision
-lightning
-terratorch
-rasterio
-numpy
-pandas
-matplotlib
-scikit-learn
+torch>=2.11,<3
+torchvision>=0.26,<1
+lightning>=2.6,<3
+terratorch>=1.2,<2
+rasterio>=1.4,<2
+numpy>=2.4,<3
+pandas>=2.3,<3
+matplotlib>=3.10,<4
+scikit-learn>=1.8,<2
 
 # Notebooks / EDA
-seaborn
-jupyterlab
+seaborn>=0.13,<1
+jupyterlab>=4.5,<5
 
 # Scripts
-google-cloud-bigquery
+google-cloud-bigquery>=3.11,<4
