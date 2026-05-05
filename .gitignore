@@ -23,5 +23,3 @@ notebooks/lightning_logs/
 # macOS
 .DS_Store
 
-# Claude Code internal
-.claude/
