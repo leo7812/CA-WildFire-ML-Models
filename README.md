@@ -2,7 +2,7 @@
 
 A machine learning web app that predicts wildfire burn probability for any location in California using live NASA satellite imagery and user-specified weather conditions.
 
-**Live site:** https://wildfire-final-512104156662.us-west1.run.app/
+**Live site:** [https://wildfire-final-512104156662.us-west1.run.app/](https://sjsu-ds-projects.wl.r.appspot.com/)
 
 ---
 
@@ -125,8 +125,3 @@ The service loads a fine-tuned **Prithvi-EO-2.0** (300M parameter geospatial fou
 
 **How consumed:** Queried by the web app at startup and cached in memory. Rendered on the Home page as an interactive bar chart showing wildfire days per year (1984–2025).
 
----
-
-## Website
-
-https://wildfire-final-512104156662.us-west1.run.app/
