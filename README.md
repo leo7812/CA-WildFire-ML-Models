@@ -2,7 +2,7 @@
 
 A machine learning web app that predicts wildfire burn probability for any location in California using live NASA satellite imagery and user-specified weather conditions.
 
-**Live site:** https://sjsu-ds-projects.wl.r.appspot.com/
+**Live site:** https://sjsu-ds-projects.appspot.com/
 
 ---
 
