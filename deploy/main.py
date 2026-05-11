@@ -1,4 +1,5 @@
 import os
+import csv
 import threading
 import requests
 from contextlib import asynccontextmanager
@@ -6,24 +7,42 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, FileResponse, Response
 from pydantic import BaseModel
-from google.cloud import bigquery
 
 INFERENCE_URL = os.environ.get(
     'INFERENCE_URL',
     'https://wildfire-inference-4hvdf26vhq-uw.a.run.app',
 )
 
-GCP_PROJECT = 'sjsu-ds-projects'
-BQ_TABLE    = 'sjsu-ds-projects.wildfire.ca_weather_fire'
+GCP_PROJECT          = 'sjsu-ds-projects'
+BQ_TABLE             = 'sjsu-ds-projects.wildfire.ca_weather_fire'
+FALLBACK_CSV         = os.path.join(os.path.dirname(__file__), 'fire_stats_fallback.csv')
 
-bq: bigquery.Client | None = None
-_bq_cache: dict | None     = None
+bq                   = None
+_bq_cache: dict | None = None
+
+
+def _load_fallback_csv() -> dict:
+    with open(FALLBACK_CSV, newline='') as f:
+        rows = list(csv.DictReader(f))
+    return {'fire_stats': [
+        {
+            'YEAR':          int(r['YEAR']),
+            'fire_days':     int(r['fire_days']),
+            'avg_max_temp':  float(r['avg_max_temp']),
+            'avg_wind_speed': float(r['avg_wind_speed']),
+        }
+        for r in rows
+    ]}
 
 
 def _init_bq():
     global bq
-    bq = bigquery.Client(project=GCP_PROJECT)
-    print('BigQuery client ready.')
+    try:
+        from google.cloud import bigquery
+        bq = bigquery.Client(project=GCP_PROJECT)
+        print('BigQuery client ready.')
+    except Exception as e:
+        print(f'BigQuery unavailable ({e}), will use fallback CSV.')
 
 
 @asynccontextmanager
@@ -76,9 +95,11 @@ async def predict_live(request: Request):
 @app.get('/api/fire_stats')
 async def fire_stats():
     global _bq_cache
-    if bq is None:
-        raise HTTPException(status_code=503, detail='Service initializing, please retry shortly')
     if _bq_cache is not None:
+        return _bq_cache
+
+    if bq is None:
+        _bq_cache = _load_fallback_csv()
         return _bq_cache
 
     query = f"""

@@ -12,25 +12,41 @@ This repo combines a fine-tuned geospatial foundation model (Prithvi-EO-2.0), li
 
 ---
 
-## Setup
+## Local Setup
 
-**Requirements:** Python 3.11, GCP credentials with access to `sjsu-ds-projects`
+**Requirements:** Python 3.11
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Run the web app locally:
+### Web App
+
 ```bash
 cd deploy
 uvicorn main:app --reload
 ```
 
-Run the inference service locally (requires model weights in GCS):
+No credentials needed. The historical fire chart falls back to a bundled CSV snapshot when BigQuery is unavailable.
+
+### Inference Service
+
 ```bash
 cd inference
-uvicorn main:app --reload
+NASA_EARTHDATA_TOKEN=<your_token> uvicorn main:app --reload
 ```
+
+**Model weights** (~1.2 GB) are hosted publicly on Hugging Face at [leo7812/firecast-wildfire](https://huggingface.co/leo7812/firecast-wildfire) and download automatically on first startup — no manual download required.
+
+**NASA Earthdata token** is required to fetch live Sentinel-2 satellite tiles. Register for a free account at [urs.earthdata.nasa.gov](https://urs.earthdata.nasa.gov), then pass your token via the `NASA_EARTHDATA_TOKEN` environment variable.
+
+### Dependency Summary
+
+| Dependency | Web App | Inference Service | How to get |
+|---|---|---|---|
+| Model weights | — | auto-downloaded from HF Hub | automatic |
+| NASA Earthdata token | — | required | free at urs.earthdata.nasa.gov |
+| GCP / BigQuery | optional | optional | falls back automatically |
 
 ---
 
@@ -66,13 +82,14 @@ uvicorn main:app --reload
 
 ```
 wildfire_project/
-├── src/            # Model architecture, dataset loader, and training scripts
-├── inference/      # Dockerized ML inference service deployed on Cloud Run
-├── deploy/         # Web application deployed on App Engine Standard
-│   └── static/     # Single-page frontend (index.html)
-├── notebooks/      # Exploratory data analysis
-├── data/           # Local training data (not tracked in git)
-└── checkpoints/    # Model weight files (not tracked in git)
+├── src/                        # Model architecture, dataset loader, and training scripts
+├── inference/                  # Dockerized ML inference service deployed on Cloud Run
+├── deploy/                     # Web application deployed on App Engine Standard
+│   ├── static/                 # Single-page frontend (index.html)
+│   └── fire_stats_fallback.csv # Bundled CA fire stats snapshot (1984–2025)
+├── notebooks/                  # Exploratory data analysis
+├── data/                       # Local training data (not tracked in git)
+└── checkpoints/                # Model weight files (not tracked in git)
 ```
 
 ---
@@ -83,15 +100,16 @@ wildfire_project/
 User Browser
      │
      ▼
-App Engine Standard              BigQuery
+App Engine Standard              BigQuery (primary)
 (deploy/)            ─────────►  sjsu-ds-projects.wildfire.ca_weather_fire
-     │                           (historical CA weather & fire stats)
+     │               ─────────►  fire_stats_fallback.csv (if BigQuery unavailable)
      │
      ▼
 Cloud Run (inference/)
      │
      ├── NASA STAC CMR  ────────► live Sentinel-2 tiles (30m resolution)
-     └── GCS Bucket     ────────► model weights (wildfire_weather_weights.pt)
+     ├── GCS Bucket     ────────► model weights (primary, same-region)
+     └── Hugging Face   ────────► model weights (fallback, leo7812/firecast-wildfire)
 ```
 
 **Scaling:**
@@ -123,5 +141,5 @@ The service loads a fine-tuned **Prithvi-EO-2.0** (300M parameter geospatial fou
 
 **How stored:** Uploaded from a local CSV into BigQuery table `sjsu-ds-projects.wildfire.ca_weather_fire`.
 
-**How consumed:** Queried by the web app at startup and cached in memory. Rendered on the Home page as an interactive bar chart showing wildfire days per year (1984–2025).
+**How consumed:** Queried by the web app at startup and cached in memory. Rendered on the Home page as an interactive bar chart showing wildfire days per year (1984–2025). A bundled snapshot (`deploy/fire_stats_fallback.csv`) is used automatically when BigQuery is unavailable.
 

@@ -2,6 +2,7 @@ import os
 import io
 import sys
 import time
+import shutil
 import base64
 import datetime
 import threading
@@ -17,7 +18,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from google.cloud import storage, secretmanager
+from google.cloud import secretmanager
+from huggingface_hub import hf_hub_download
 from PIL import Image
 
 sys.path.insert(0, '/app/src')
@@ -28,6 +30,7 @@ from dataset import WEATHER_MEAN, WEATHER_STD
 # ── Config ────────────────────────────────────────────────────────────────────
 GCP_PROJECT  = 'sjsu-ds-projects'
 BUCKET_NAME  = 'sjsu-wildfire-models'
+HF_REPO_ID   = 'leo7812/firecast-wildfire'
 WEIGHTS_FILE = 'wildfire_weather_weights.pt'
 WEIGHTS_PATH = '/tmp/wildfire_weather_weights.pt'
 
@@ -54,12 +57,18 @@ def _startup():
     global model, _startup_error
     try:
         if not os.path.exists(WEIGHTS_PATH):
-            print('Downloading weights from GCS...')
-            gcs  = storage.Client(project=GCP_PROJECT)
-            blob = gcs.bucket(BUCKET_NAME).blob(WEIGHTS_FILE)
-            blob.download_to_filename(WEIGHTS_PATH, timeout=300)
-            size_mb = os.path.getsize(WEIGHTS_PATH) / 1024 / 1024
-            print(f'Download complete ({size_mb:.0f} MB).')
+            try:
+                from google.cloud import storage
+                print('Downloading weights from GCS...')
+                gcs  = storage.Client(project=GCP_PROJECT)
+                blob = gcs.bucket(BUCKET_NAME).blob(WEIGHTS_FILE)
+                blob.download_to_filename(WEIGHTS_PATH, timeout=300)
+                print(f'GCS download complete ({os.path.getsize(WEIGHTS_PATH) / 1024 / 1024:.0f} MB).')
+            except Exception as gcs_err:
+                print(f'GCS unavailable ({gcs_err}), falling back to Hugging Face Hub...')
+                cached = hf_hub_download(repo_id=HF_REPO_ID, filename=WEIGHTS_FILE)
+                shutil.copy(cached, WEIGHTS_PATH)
+                print(f'HF download complete ({os.path.getsize(WEIGHTS_PATH) / 1024 / 1024:.0f} MB).')
         else:
             print(f'Using cached weights at {WEIGHTS_PATH}.')
 
@@ -71,9 +80,19 @@ def _startup():
         print('Model ready.')
 
         print('Loading NASA Earthdata token...')
-        sm    = secretmanager.SecretManagerServiceClient()
-        name  = 'projects/sjsu-ds-projects/secrets/NASA_EARTHDATA_TOKEN/versions/latest'
-        token = sm.access_secret_version(name=name).payload.data.decode('UTF-8').strip()
+        token = os.environ.get('NASA_EARTHDATA_TOKEN', '').strip()
+        if not token:
+            try:
+                sm    = secretmanager.SecretManagerServiceClient()
+                name  = 'projects/sjsu-ds-projects/secrets/NASA_EARTHDATA_TOKEN/versions/latest'
+                token = sm.access_secret_version(name=name).payload.data.decode('UTF-8').strip()
+                print('NASA token loaded from Secret Manager.')
+            except Exception as sm_err:
+                raise RuntimeError(
+                    f'NASA_EARTHDATA_TOKEN env var not set and Secret Manager unavailable: {sm_err}'
+                )
+        else:
+            print('NASA token loaded from environment variable.')
 
         with open(GDAL_AUTH_FILE, 'w') as f:
             f.write(f'Authorization: Bearer {token}\n')
