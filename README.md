@@ -16,21 +16,6 @@ https://github.com/user-attachments/assets/943e56c9-1c10-40b0-9841-89e43d8c65fc
 
 This repo combines a fine-tuned geospatial foundation model (Prithvi-EO-2.0), live NASA Sentinel-2 satellite imagery, and historical California weather data to estimate wildfire spread risk. Users pick a location on a map, adjust weather sliders, and receive a burn probability heatmap and predicted acreage in real time.
 
----
-
-## Results
-
-*Fill in with your actual eval numbers — this is the single most important addition for a technical audience.*
-
-| Metric | Value |
-|---|---|
-| Pixel accuracy (held-out HLS scenes) | `[X]%` |
-| IoU / Dice (burned class) | `[X]` |
-| Inference latency (per request, Cloud Run) | `[X]s` |
-| Training data size | 804 labeled 512×512 scenes |
-
----
-
 ## Local Setup
 
 **Requirements:** Python 3.11
