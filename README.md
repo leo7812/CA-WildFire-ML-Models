@@ -4,6 +4,12 @@ A machine learning web app that predicts wildfire burn probability for any locat
 
 **Live site:** https://sjsu-ds-projects.appspot.com/
 
+<!-- 
+Add a demo GIF here — screen-record: click a location on the map -> adjust weather sliders -> heatmap appears.
+![demo](docs/demo.gif)
+-->
+https://github.com/user-attachments/assets/943e56c9-1c10-40b0-9841-89e43d8c65fc
+
 ---
 
 ## Summary
@@ -12,17 +18,30 @@ This repo combines a fine-tuned geospatial foundation model (Prithvi-EO-2.0), li
 
 ---
 
+## Results
+
+*Fill in with your actual eval numbers — this is the single most important addition for a technical audience.*
+
+| Metric | Value |
+|---|---|
+| Pixel accuracy (held-out HLS scenes) | `[X]%` |
+| IoU / Dice (burned class) | `[X]` |
+| Inference latency (per request, Cloud Run) | `[X]s` |
+| Training data size | 804 labeled 512×512 scenes |
+
+---
+
 ## Local Setup
 
 **Requirements:** Python 3.11
 
-```bash
+```
 pip install -r requirements.txt
 ```
 
 ### Web App
 
-```bash
+```
 cd deploy
 uvicorn main:app --reload
 ```
@@ -31,7 +50,7 @@ No credentials needed. The historical fire chart falls back to a bundled CSV sna
 
 ### Inference Service
 
-```bash
+```
 cd inference
 NASA_EARTHDATA_TOKEN=<your_token> uvicorn main:app --reload
 ```
@@ -42,11 +61,11 @@ NASA_EARTHDATA_TOKEN=<your_token> uvicorn main:app --reload
 
 ### Dependency Summary
 
-| Dependency | Web App | Inference Service | How to get |
-|---|---|---|---|
-| Model weights | — | auto-downloaded from HF Hub | automatic |
-| NASA Earthdata token | — | required | free at urs.earthdata.nasa.gov |
-| GCP / BigQuery | optional | optional | falls back automatically |
+| Dependency           | Web App  | Inference Service           | How to get                     |
+| --------------------- | -------- | ---------------------------- | -------------------------------- |
+| Model weights         | —        | auto-downloaded from HF Hub  | automatic                        |
+| NASA Earthdata token  | —        | required                     | free at urs.earthdata.nasa.gov   |
+| GCP / BigQuery        | optional | optional                     | falls back automatically         |
 
 ---
 
@@ -113,6 +132,7 @@ Cloud Run (inference/)
 ```
 
 **Scaling:**
+
 - App Engine Standard scales between 1–3 instances based on CPU utilization (65% threshold).
 - Cloud Run scales to zero when idle and spins up on demand; one worker per instance due to model memory.
 - BigQuery results are cached in memory after the first request to avoid repeated query costs.
@@ -121,14 +141,14 @@ Cloud Run (inference/)
 
 ## Inference Service
 
-**Location:** `inference/`  
-**Docker:** `inference/Dockerfile`  
+**Location:** `inference/`
+**Docker:** `inference/Dockerfile`
 **Model training:** `src/train_colab.py`, `src/model.py`
 
 The service loads a fine-tuned **Prithvi-EO-2.0** (300M parameter geospatial foundation model) with a 5-scalar weather conditioning MLP. On each request it fetches the most recent cloud-free Sentinel-2 chip for the given coordinates from NASA's STAC API, normalizes the 6 spectral bands, and runs a forward pass.
 
 | Endpoint | Input | Output |
-|---|---|---|
+| --- | --- | --- |
 | `POST /predict_live` | `lat, lon, max_temp, wind_speed, temp_range, lagged_wind, wind_temp_ratio` | burn mask image, probability heatmap, predicted acres, peak probability |
 | `POST /prefetch` | `lat, lon` | warms tile cache in background |
 | `GET /health` | — | service status, model load state |
@@ -143,3 +163,22 @@ The service loads a fine-tuned **Prithvi-EO-2.0** (300M parameter geospatial fou
 
 **How consumed:** Queried by the web app at startup and cached in memory. Rendered on the Home page as an interactive bar chart showing wildfire days per year (1984–2025). A bundled snapshot (`deploy/fire_stats_fallback.csv`) is used automatically when BigQuery is unavailable.
 
+---
+
+## Technical Challenges
+
+A few problems that came up during development and how they were solved:
+
+- **Dependency conflict on Cloud Run:** `terratorch` silently upgraded `segmentation-models-pytorch` past the version the model was trained against, causing shape mismatches at inference time. Fixed by pinning both packages explicitly in `requirements.txt`.
+- **Cold-start timeouts:** Cloud Run health checks were failing because model weight loading (~1.2 GB from GCS/Hugging Face) took longer than the default startup probe window. Solved by `[describe your fix — e.g. increasing startup probe timeout, lazy-loading weights, warming the model in a background thread]`.
+- **OOM kills under load:** The 300M-parameter model plus a full forward pass exceeded default Cloud Run memory limits. Resolved by `[describe — e.g. bumping instance memory, batching strategy, single-worker config]`.
+- **Dynamic location support:** Initial version only supported a fixed set of pre-cached tiles. Rebuilt the inference path to fetch live Sentinel-2 tiles from NASA's STAC API on demand for any California coordinate, with cloud-cover fallback logic when the freshest tile is obscured.
+
+---
+
+## Tech Stack
+
+- **ML:** PyTorch, Prithvi-EO-2.0 (300M), `segmentation-models-pytorch`, `terratorch`
+- **Backend:** FastAPI, Uvicorn, Docker
+- **Infra:** Google Cloud Run, App Engine Standard, BigQuery, Google Cloud Storage
+- **Data:** NASA HLS / Sentinel-2 (STAC API), CAL FIRE / NOAA historical records, Hugging Face Hub
