@@ -4,10 +4,6 @@ A machine learning web app that predicts wildfire burn probability for any locat
 
 **Live site:** https://sjsu-ds-projects.appspot.com/
 
-<!-- 
-Add a demo GIF here — screen-record: click a location on the map -> adjust weather sliders -> heatmap appears.
-![demo](docs/demo.gif)
--->
 https://github.com/user-attachments/assets/943e56c9-1c10-40b0-9841-89e43d8c65fc
 
 ---
@@ -16,24 +12,29 @@ https://github.com/user-attachments/assets/943e56c9-1c10-40b0-9841-89e43d8c65fc
 
 This repo combines a fine-tuned geospatial foundation model (Prithvi-EO-2.0), live NASA Sentinel-2 satellite imagery, and historical California weather data to estimate wildfire spread risk. Users pick a location on a map, adjust weather sliders, and receive a burn probability heatmap and predicted acreage in real time.
 
+---
+
 ## Metrics
+
 Validation performance (264-tile validation split, HLS Burn Scars dataset):
 - IoU: 0.844
 - F1 / Dice: 0.915
 - Precision: 0.931 | Recall: 0.900
 - Pixel accuracy: 0.985
 
+---
+
 ## Local Setup
 
 **Requirements:** Python 3.11
 
-```
+```bash
 pip install -r requirements.txt
 ```
 
 ### Web App
 
-```
+```bash
 cd deploy
 uvicorn main:app --reload
 ```
@@ -42,7 +43,7 @@ No credentials needed. The historical fire chart falls back to a bundled CSV sna
 
 ### Inference Service
 
-```
+```bash
 cd inference
 NASA_EARTHDATA_TOKEN=<your_token> uvicorn main:app --reload
 ```
@@ -53,11 +54,11 @@ NASA_EARTHDATA_TOKEN=<your_token> uvicorn main:app --reload
 
 ### Dependency Summary
 
-| Dependency           | Web App  | Inference Service           | How to get                     |
-| --------------------- | -------- | ---------------------------- | -------------------------------- |
-| Model weights         | —        | auto-downloaded from HF Hub  | automatic                        |
-| NASA Earthdata token  | —        | required                     | free at urs.earthdata.nasa.gov   |
-| GCP / BigQuery        | optional | optional                     | falls back automatically         |
+| Dependency | Web App | Inference Service | How to get |
+|---|---|---|---|
+| Model weights | — | auto-downloaded from HF Hub | automatic |
+| NASA Earthdata token | — | required | free at urs.earthdata.nasa.gov |
+| GCP / BigQuery | optional | optional | falls back automatically |
 
 ---
 
@@ -125,7 +126,7 @@ Cloud Run (inference/)
 
 **Scaling:**
 
-- App Engine Standard scales between 1–3 instances based on CPU utilization (65% threshold).
+- App Engine Standard scales between 0–3 instances based on CPU utilization (65% threshold).
 - Cloud Run scales to zero when idle and spins up on demand; one worker per instance due to model memory.
 - BigQuery results are cached in memory after the first request to avoid repeated query costs.
 
@@ -162,8 +163,8 @@ The service loads a fine-tuned **Prithvi-EO-2.0** (300M parameter geospatial fou
 A few problems that came up during development and how they were solved:
 
 - **Dependency conflict on Cloud Run:** `terratorch` silently upgraded `segmentation-models-pytorch` past the version the model was trained against, causing shape mismatches at inference time. Fixed by pinning both packages explicitly in `requirements.txt`.
-- **Cold-start timeouts:** Cloud Run health checks were failing because model weight loading (~1.2 GB from GCS/Hugging Face) took longer than the default startup probe window. Solved by `[describe your fix — e.g. increasing startup probe timeout, lazy-loading weights, warming the model in a background thread]`.
-- **OOM kills under load:** The 300M-parameter model plus a full forward pass exceeded default Cloud Run memory limits. Resolved by `[describe — e.g. bumping instance memory, batching strategy, single-worker config]`.
+- **Cold-start timeouts:** Cloud Run health checks were failing because model weight loading (~1.2 GB from GCS/Hugging Face) took longer than the default startup probe window. Solved by loading the model on a background thread from FastAPI's `lifespan` handler (`inference/main.py`) so the server binds to the port and starts responding to `/health` immediately; `/health` and `/predict_live` report a `warming_up` state until the load finishes.
+- **OOM kills under load:** The 300M-parameter model plus a full forward pass exceeded default Cloud Run memory limits. Resolved by capping the inference container to a single Uvicorn worker (`--workers 1` in `inference/Dockerfile`), so only one copy of the model is resident in memory per instance instead of one per worker.
 - **Dynamic location support:** Initial version only supported a fixed set of pre-cached tiles. Rebuilt the inference path to fetch live Sentinel-2 tiles from NASA's STAC API on demand for any California coordinate, with cloud-cover fallback logic when the freshest tile is obscured.
 
 ---

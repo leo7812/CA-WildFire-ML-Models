@@ -203,10 +203,11 @@
 
   .content-card h2 {
     font-family: var(--display);
-    font-size: 32px;
+    font-size: clamp(28px, 4vw, 48px);
     letter-spacing: 0.06em;
-    color: var(--text);
+    color: var(--fire);
     margin-bottom: 8px;
+    line-height: 0.95;
   }
 
   .content-card h2 span {
@@ -257,8 +258,7 @@
     background: var(--bg2);
     border: 1px solid var(--border);
     border-radius: 6px;
-    padding: 32px;
-    min-height: 260px;
+    padding: 28px 32px;
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -266,10 +266,10 @@
 
   .home-section h2 {
     font-family: var(--display);
-    font-size: clamp(40px, 6vw, 72px);
+    font-size: clamp(28px, 4vw, 48px);
     letter-spacing: 0.06em;
     color: var(--fire);
-    margin-bottom: 12px;
+    margin-bottom: 10px;
     line-height: 0.95;
   }
 
@@ -282,7 +282,7 @@
   }
 
   .home-section.page-hero {
-    min-height: 360px;
+    min-height: 200px;
   }
 
   /* ── EDA sections ── */
@@ -291,7 +291,7 @@
     border: 1px solid var(--border);
     border-radius: 6px;
     padding: 32px;
-    min-height: 300px;
+    min-height: 160px;
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -395,17 +395,18 @@
   }
 
   .mini-card h3 {
-    font-family: var(--mono);
-    font-size: 11px;
+    font-family: var(--display);
+    font-size: clamp(20px, 2.5vw, 28px);
+    letter-spacing: 0.06em;
     color: var(--fire);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    margin-bottom: 8px;
+    line-height: 0.95;
+    margin-bottom: 10px;
   }
 
   .mini-card p {
     color: var(--text-mid);
-    line-height: 1.7;
+    font-size: 15px;
+    line-height: 1.8;
   }
 
   #map {
@@ -851,6 +852,7 @@
     <button class="tab-link" onclick="openTab('analytical-methods', this)">Analytical Methods</button>
     <button class="tab-link active" onclick="openTab('fire-spread-predictor', this)">Fire Spread Predictor</button>
     <button class="tab-link" onclick="openTab('major-findings', this)">Major Findings</button>
+    <button class="tab-link" onclick="openTab('summary', this)">Summary</button>
   </nav>
 
   <div class="header-right">
@@ -898,10 +900,19 @@
   <section id="eda" class="tab-page">
     <div class="eda-hero">
       <h1>Exploratory Data <span>Analysis</span></h1>
+      <p>
+        This section shows the patterns and relationships we explored before building
+        the wildfire spread predictor. Each visualization helps explain how environmental
+        and weather-based features may influence wildfire behavior.
+      </p>
+    </div>
+
+    <div class="home-section">
       <h2>Preprocessing the Data</h2>
       <p>
-        For our data, we combined two datasets together. The wildfire dataset contains information about fire incidents which includes
-        alarm date, containment date, fire name, and GIS calculated acres. The weather dataset has daily weather observations such as
+        For our data, we combined two datasets together. The wildfire dataset contains
+        information about fire incidents including alarm date, containment date, fire name,
+        and GIS calculated acres. The weather dataset has daily weather observations such as
         precipitation, average wind speed, and maximum temperature.
       </p>
     </div>
@@ -1112,50 +1123,252 @@
   </section>
 
   <section id="analytical-methods" class="tab-page">
-    <div class="content-card">
+    <div class="content-card" style="margin-bottom:0">
       <h2>Analytical <span>Methods</span></h2>
-      <p>
-        Overview of the methods and models used to predict wildfire spread.
-      </p>
+      <p>A technical overview of the datasets, model architecture, and training pipeline used to build the wildfire spread predictor.</p>
+    </div>
+
+    <div class="card-grid" style="grid-template-columns: repeat(2, 1fr);">
+      <div class="mini-card">
+        <h3>Datasets</h3>
+        <p>
+          The <strong>NASA HLS Burn Scars dataset</strong> (Hugging Face) provides 804 labeled
+          512×512 satellite scenes from 2018–2021. Each scene has 6 spectral bands (Blue, Green,
+          Red, NIR, SWIR1, SWIR2) and a pixel-level binary burn mask. Class split: 11% burned,
+          88% unburned, 1% no-data.
+        </p>
+        <p>
+          A <strong>California weather and fire CSV</strong> (CAL FIRE / NOAA, 1984–2025) provides
+          daily max temperature, wind speed, lagged wind speed, temperature range, and a
+          wind-to-temperature ratio. Stored in BigQuery and queried live on the Home page.
+        </p>
+      </div>
+
+      <div class="mini-card">
+        <h3>Model Architecture</h3>
+        <p>
+          The core model is <strong>Prithvi-EO-2.0</strong> (300M params) — a geospatial foundation
+          model with a ViT encoder and UNet decoder that produces per-pixel burn logits at
+          512×512 / 30m resolution.
+        </p>
+        <p>
+          A <strong>weather encoder MLP</strong> maps 5 weather scalars to a 2-class bias vector,
+          which is added to Prithvi's spatial logits. This lets weather conditions globally shift
+          burn vs. unburned predictions without changing the spatial feature extraction.
+        </p>
+      </div>
+
+      <div class="mini-card">
+        <h3>Training</h3>
+        <p>
+          Two-phase strategy: <strong>Phase 1</strong> freezes the Prithvi backbone and trains only
+          the weather encoder and decoder (~20 epochs). <strong>Phase 2</strong> unfreezes all
+          weights for end-to-end fine-tuning at a lower learning rate (~20 epochs).
+        </p>
+        <p>
+          CrossEntropy loss with class weights [1.0, 2.0] compensates for the imbalanced burn ratio.
+          Trained on Google Colab with bf16 mixed precision.
+        </p>
+      </div>
+
+      <div class="mini-card">
+        <h3>Live Inference Pipeline</h3>
+        <p>
+          On prediction, the system queries <strong>NASA STAC CMR</strong> for the most recent
+          cloud-free Sentinel-2 tile within a 180-day window. A 512×512 chip (~15×15 km) is
+          streamed from NASA cloud-optimized GeoTIFFs via GDAL, normalized across 6 bands, and
+          passed through the model with weather scalars.
+        </p>
+        <p>
+          Output: burn probability heatmap + binary mask. Predicted acres = burned pixels × 900 m²
+          / 4047 m²/acre.
+        </p>
+        <p style="margin-top:8px;font-size:12px;color:var(--text-dim);">
+          References: Prithvi-EO-2.0 (NASA/IBM, 2024) · HLS Burn Scars (nasa-impact, HuggingFace) · Terratorch (IBM Research) · PyTorch Lightning
+        </p>
+      </div>
     </div>
   </section>
 
   <section id="major-findings" class="tab-page">
-    <div class="content-card">
-      <h2>Major <span> Findings</span></h2>
+    <div class="eda-hero">
+      <h1>Major <span>Findings</span></h1>
       <p>
-        Here are the questions/hypothesis we made ---.
+        Key results from our exploratory analysis and model predictions.
       </p>
-      <ul>
-        <li>Which environmental factors strongly influence the spread of wildfires?</li>
-        <li>How well will the model perform when analyzing different regions in California?</li>
-        <li> </li>
-        <li> </li>
-        <li> </li>
-      </ul>
+    </div>
+
+    <div class="eda-section">
+      <div class="eda-image">
+        <img src="/static/wind_vs_fire.png" alt="Wind Speed vs Fire Size">
+      </div>
+      <div class="eda-text">
+        <h2>Wind Speed is Not the Dominant Driver</h2>
+        <p>
+          Contrary to the common assumption that higher wind speeds cause larger fires,
+          our data shows that the majority of California wildfires — including the largest
+          ones — occur at moderate wind speeds of 6–10 mph. Fires at extreme wind speeds
+          were comparatively rare. This suggests that wind speed alone is a poor predictor
+          of fire size, and that its interaction with temperature and moisture conditions
+          matters more.
+        </p>
+      </div>
+    </div>
+
+    <div class="eda-section reverse">
+      <div class="eda-image">
+        <img src="/static/temp_vs_rain.png" alt="Temperature vs Lagged Rainfall">
+      </div>
+      <div class="eda-text">
+        <h2>Heat + Drought Conditions Amplify Fire Risk</h2>
+        <p>
+          High maximum temperatures combined with extended dry periods (low lagged rainfall)
+          consistently appear in the largest fire events. When temperatures exceed 90°F and
+          rainfall has been absent for several days, fire size increases substantially. This
+          interaction informed our decision to include both max temperature and lagged wind
+          as features in the weather encoder.
+        </p>
+      </div>
+    </div>
+
+    <div class="eda-section">
+      <div class="eda-image">
+        <img src="/static/weather_vs_fire_size.png" alt="Correlation Matrix">
+      </div>
+      <div class="eda-text">
+        <h2>Weather Features Show Moderate Correlation with Fire Size</h2>
+        <p>
+          The correlation matrix reveals that no single weather variable strongly predicts
+          fire size in isolation. Max temperature and wind/temp ratio show the highest
+          correlations, while raw wind speed alone has a weak relationship. This supported
+          our choice to combine multiple weather variables into a learned embedding rather
+          than relying on any one feature.
+        </p>
+      </div>
     </div>
 
     <div class="card-grid">
       <div class="mini-card">
-        <h3>Which environmental factors strongly influence the spread of wildfires?</h3>
+        <h3>Satellite Imagery Captures Burn Boundaries</h3>
         <p>
-          description
+          The Prithvi-EO-2.0 model, trained on NASA HLS burn scars, successfully identifies
+          burned vs. unburned regions from spectral signatures — particularly the SWIR bands,
+          which are highly sensitive to char and vegetation loss. The predicted burn masks
+          visually align with expected fire perimeters at 30m resolution.
         </p>
       </div>
-
       <div class="mini-card">
-        <h3>How well will the model perform when analyzing different regions in California?</h3>
+        <h3>Weather Conditioning Shifts Predictions</h3>
         <p>
-          description
+          Adding the weather encoder meaningfully changes the model's output. Under high-temperature,
+          low-wind conditions the model predicts smaller, more contained burn areas. Under the
+          6–10 mph wind range with high temperatures, predicted acreage increases noticeably —
+          consistent with the patterns observed in historical fire data.
         </p>
       </div>
-
       <div class="mini-card">
-        <h3>add card</h3>
+        <h3>Cloud Cover Limits Live Tile Availability</h3>
         <p>
-          description
+          California's coastal and northern regions often lack recent cloud-free Sentinel-2 tiles,
+          requiring the system to look back up to 180 days. Inland and southern California locations
+          tend to have more recent imagery available due to lower cloud cover, resulting in faster
+          and more accurate predictions for those areas.
         </p>
       </div>
+    </div>
+  </section>
+
+  <section id="summary" class="tab-page">
+    <div class="eda-hero">
+      <h1>How It <span>Works</span></h1>
+      <p>
+        A plain-language guide to what FIRECAST does, what you put in, and what the results mean.
+      </p>
+    </div>
+
+    <div class="home-section">
+      <h2>What Is This?</h2>
+      <p>
+        FIRECAST is a wildfire burn area predictor for California. It combines real satellite
+        imagery from NASA with weather conditions you control to estimate how much land could
+        burn if a fire started at a chosen location.
+      </p>
+    </div>
+
+    <div class="home-section">
+      <h2>Inputs</h2>
+      <p style="margin-bottom:1rem;">
+        <strong style="color:var(--text);">1. Location</strong> — Click anywhere on the California map in the Fire Spread Predictor tab.
+        The tool fetches the most recent cloud-free satellite image of that area (up to 180 days back).
+      </p>
+      <p style="margin-bottom:0.5rem;">
+        <strong style="color:var(--text);">2. Weather conditions</strong> — Five sliders let you set the conditions:
+      </p>
+      <ul style="padding-left:1.25rem;color:var(--text-mid);line-height:2;">
+        <li><strong style="color:var(--text);">Max Temperature</strong> — The day's peak temperature (°F)</li>
+        <li><strong style="color:var(--text);">Wind Speed</strong> — Current wind speed (mph)</li>
+        <li><strong style="color:var(--text);">Temp Range</strong> — The swing between the daily high and low temperatures (°F)</li>
+        <li><strong style="color:var(--text);">Lagged Wind</strong> — Wind speed from prior days, reflecting how conditions have been building</li>
+        <li><strong style="color:var(--text);">Wind / Temp Ratio</strong> — A combined measure of wind and heat stress</li>
+      </ul>
+    </div>
+
+    <div class="home-section">
+      <h2>Outputs</h2>
+      <p style="margin-bottom:1rem;">
+        After clicking <strong style="color:var(--fire);">Run Prediction</strong>, you get three images side by side and three metrics:
+      </p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:1rem;">
+        <div class="mini-card">
+          <h3>Input RGB</h3>
+          <p>True-color satellite photo of your selected area, streamed live from NASA.</p>
+        </div>
+        <div class="mini-card">
+          <h3>Predicted Mask</h3>
+          <p>Pixels the model thinks would burn, highlighted in orange.</p>
+        </div>
+        <div class="mini-card">
+          <h3>Burn Probability</h3>
+          <p>A heatmap — brighter areas have a higher predicted chance of burning.</p>
+        </div>
+        <div class="mini-card">
+          <h3>Predicted Burn</h3>
+          <p>Estimated total area that could burn, in acres.</p>
+        </div>
+        <div class="mini-card">
+          <h3>Peak Burn Probability</h3>
+          <p>The single highest-confidence pixel in the scene, shown as a percentage.</p>
+        </div>
+        <div class="mini-card">
+          <h3>Tile Date</h3>
+          <p>The date the satellite image was originally captured by Sentinel-2.</p>
+        </div>
+      </div>
+      <p>
+        The <strong style="color:var(--text);">Fire Risk Index</strong> gauge updates in real time as you adjust the sliders,
+        even before running a prediction.
+      </p>
+    </div>
+
+    <div class="home-section">
+      <h2>Limitations</h2>
+      <ul style="padding-left:1.25rem;color:var(--text-mid);line-height:2.2;">
+        <li>Only works within California.</li>
+        <li>
+          <strong style="color:var(--text);">Best suited for small to medium fires.</strong>
+          Our training dataset (CAL FIRE 1984–2025) is dominated by small and medium fire events,
+          so the model was intentionally tuned to perform well in those cases. Predictions for
+          very large fire events may be less reliable.
+        </li>
+        <li>
+          Requires a recent cloud-free satellite image — coastal and northern areas may use
+          imagery up to 6 months old due to higher cloud cover.
+        </li>
+        <li>
+          Predictions reflect potential burn conditions under the weather inputs you set,
+          not active fire tracking or real-time fire progression.
+        </li>
+      </ul>
     </div>
   </section>
 
@@ -1413,9 +1626,13 @@ updateRisk();
 
 // ── Fire stats chart (BigQuery) ───────────────────────────────────────
 let fireChart = null;
+let fireChartLoading = false;
 
 async function loadFireChart() {
-  if (fireChart) return;
+  if (fireChart || fireChartLoading) return;
+  fireChartLoading = true;
+  const existing = Chart.getChart('fire-chart');
+  if (existing) existing.destroy();
   const status = document.getElementById('fire-chart-status');
   status.textContent = 'Loading data from BigQuery...';
   try {
@@ -1473,6 +1690,7 @@ async function loadFireChart() {
     status.textContent = `${rows.length} years · source: BigQuery (sjsu-ds-projects.wildfire.ca_weather_fire)`;
   } catch (err) {
     status.textContent = 'Failed to load fire stats: ' + err.message;
+    fireChartLoading = false;
   }
 }
 

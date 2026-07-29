@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import terratorch
 import terratorch.tasks
 from lightning import LightningModule
@@ -27,8 +28,6 @@ def build_prithvi_task(freeze_backbone=True):
             'head_dropout': 0.1,
             'num_classes': 2,
         },
-        loss='ce',
-        class_weights=torch.tensor([1.0, 2.0]),
         ignore_index=-1,
         lr=1e-4,
         optimizer='AdamW',
@@ -36,6 +35,73 @@ def build_prithvi_task(freeze_backbone=True):
         freeze_decoder=False,
     )
     return task
+
+
+class FocalLoss(nn.Module):
+    """
+    Multi-class focal loss. Down-weights easy, already-confident pixels (both
+    classes) so gradient concentrates on hard/ambiguous ones, instead of
+    relying on a single blunt class-weight multiplier for the ~8:1 imbalance.
+    """
+    def __init__(self, alpha=(1.0, 1.0), gamma=2.0, ignore_index=-1):
+        super().__init__()
+        self.gamma = gamma
+        self.ignore_index = ignore_index
+        self.register_buffer('alpha', torch.tensor(alpha, dtype=torch.float32))
+
+    def forward(self, logits, target):
+        valid = target != self.ignore_index
+        ce = F.cross_entropy(logits, target, ignore_index=self.ignore_index, reduction='none')
+        p_t = torch.exp(-ce)
+        alpha_t = self.alpha[target.clamp(min=0)]
+        focal = alpha_t * (1 - p_t) ** self.gamma * ce
+        denom = valid.sum().clamp(min=1)
+        return focal[valid].sum() / denom
+
+
+class TverskyLoss(nn.Module):
+    """
+    Soft Tversky loss on the burned-class probability. alpha weights false
+    positives, beta weights false negatives -- alpha > beta trades recall for
+    precision by penalizing false positives harder.
+    """
+    def __init__(self, alpha=0.7, beta=0.3, ignore_index=-1, smooth=1.0):
+        super().__init__()
+        self.alpha = alpha
+        self.beta = beta
+        self.ignore_index = ignore_index
+        self.smooth = smooth
+
+    def forward(self, logits, target):
+        valid = (target != self.ignore_index).float()
+        target_burned = (target == 1).float()
+        probs = torch.softmax(logits, dim=1)[:, 1] * valid
+        tp = (probs * target_burned).sum()
+        fp = (probs * (1 - target_burned) * valid).sum()
+        fn = ((1 - probs) * target_burned).sum()
+        tversky = (tp + self.smooth) / (tp + self.alpha * fp + self.beta * fn + self.smooth)
+        return 1 - tversky
+
+
+class FocalTverskyLoss(nn.Module):
+    """
+    Focal + Tversky hybrid: focal handles the ~8:1 pixel imbalance without an
+    aggressive class-weight multiplier, Tversky's alpha > beta then explicitly
+    penalizes false positives harder for precision. This is the single source
+    of truth for the segmentation criterion -- build_prithvi_task()'s task is
+    only used for its backbone/decoder; its own loss config is not on the
+    training path.
+    """
+    def __init__(self, focal_alpha=(1.0, 3.0), focal_gamma=2.0,
+                 tversky_alpha=0.7, tversky_beta=0.3, tversky_weight=1.0,
+                 ignore_index=-1):
+        super().__init__()
+        self.focal = FocalLoss(alpha=focal_alpha, gamma=focal_gamma, ignore_index=ignore_index)
+        self.tversky = TverskyLoss(alpha=tversky_alpha, beta=tversky_beta, ignore_index=ignore_index)
+        self.tversky_weight = tversky_weight
+
+    def forward(self, logits, target):
+        return self.focal(logits, target) + self.tversky_weight * self.tversky(logits, target)
 
 
 class WeatherConditionedWildfire(LightningModule):
@@ -69,11 +135,8 @@ class WeatherConditionedWildfire(LightningModule):
             nn.Linear(128, 2),   # 2 outputs = bias for [unburned, burned] logits
         )
 
-        # Loss
-        self.criterion = nn.CrossEntropyLoss(
-            weight=torch.tensor([1.0, 2.0]),
-            ignore_index=-1
-        )
+        # Loss: Focal + Tversky hybrid (see FocalTverskyLoss docstring)
+        self.criterion = FocalTverskyLoss(ignore_index=-1)
 
     def forward(self, image, weather):
         # Prithvi spatial prediction: (B, 2, H, W)

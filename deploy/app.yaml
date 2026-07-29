@@ -6,6 +6,6 @@ env_variables:
   INFERENCE_URL: https://wildfire-inference-512104156662.us-west1.run.app
 
 automatic_scaling:
-  min_instances: 1
+  min_instances: 0
   max_instances: 3
   target_cpu_utilization: 0.65

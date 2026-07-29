@@ -4,7 +4,7 @@ from torch.utils.data import DataLoader
 from lightning import Trainer
 from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 
-from dataset import HLSBurnScarsDataset
+from dataset import HLSBurnScarsDataset, find_pairs, group_split_pairs
 from model import WeatherConditionedWildfire
 
 # ── Paths (local M2) ──────────────────────────────────────────────────────────
@@ -20,10 +20,23 @@ BATCH_SIZE    = 2
 NUM_WORKERS   = 0
 PHASE1_EPOCHS = 3
 PHASE2_EPOCHS = 2
+VAL_FRACTION  = 1/3    # matches upstream's original 2/3 train : 1/3 val scale
+SPLIT_SEED    = 42
+
+# ── Pool both dirs, re-split by MGRS tile group (zero tile overlap) ───────────
+all_pairs = find_pairs(TRAIN_DIR) + find_pairs(VAL_DIR)
+train_pairs, val_pairs, train_tiles, val_tiles = group_split_pairs(
+    all_pairs, val_fraction=VAL_FRACTION, seed=SPLIT_SEED
+)
+
+print(f'Pooled {len(all_pairs)} scenes across {len(train_tiles) + len(val_tiles)} tiles')
+print(f'Train: {len(train_pairs)} scenes / {len(train_tiles)} tiles')
+print(f'Val:   {len(val_pairs)} scenes / {len(val_tiles)} tiles')
+print(f'Tile overlap between splits: {len(train_tiles & val_tiles)} (must be 0)')
 
 # ── Datasets ──────────────────────────────────────────────────────────────────
-train_ds = HLSBurnScarsDataset(TRAIN_DIR, weather_csv=WEATHER_CSV, augment=True)
-val_ds   = HLSBurnScarsDataset(VAL_DIR,   weather_csv=WEATHER_CSV, augment=False)
+train_ds = HLSBurnScarsDataset(train_pairs, weather_csv=WEATHER_CSV, augment=True)
+val_ds   = HLSBurnScarsDataset(val_pairs,   weather_csv=WEATHER_CSV, augment=False)
 
 train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True,  num_workers=NUM_WORKERS)
 val_loader   = DataLoader(val_ds,   batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)

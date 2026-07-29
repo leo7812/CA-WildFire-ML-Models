@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
+from sklearn.model_selection import GroupShuffleSplit
 import rasterio
 
 
@@ -29,6 +30,19 @@ def parse_date_from_filename(filename):
     return None
 
 
+def parse_tile_id_from_filename(filename):
+    """
+    Extracts the MGRS tile ID from an HLS filename.
+    Example: subsetted_512x512_HLS.S30.T10SEH.2018190.v1.4_merged.tif -> 'T10SEH'
+    Returns None if parsing fails.
+    """
+    basename = os.path.basename(filename)
+    for part in basename.split('.'):
+        if len(part) == 6 and part[0] == 'T' and part[1:3].isdigit() and part[3:].isalpha():
+            return part
+    return None
+
+
 def load_weather_df(csv_path):
     """
     Loads and preprocesses the weather dataframe.
@@ -38,6 +52,47 @@ def load_weather_df(csv_path):
     wc_df['DATE'] = pd.to_datetime(wc_df['DATE'])
     wc_df = wc_df.set_index('DATE')
     return wc_df
+
+
+def find_pairs(tile_dir):
+    """Scans a directory for (input, mask) tif pairs."""
+    all_inputs = sorted(glob.glob(os.path.join(tile_dir, '*_merged.tif')))
+    pairs = []
+    for inp in all_inputs:
+        mask = inp.replace('_merged.tif', '.mask.tif')
+        if os.path.exists(mask):
+            pairs.append((inp, mask))
+    return pairs
+
+
+def group_split_pairs(pairs, val_fraction=1/3, seed=42):
+    """
+    Splits (input, mask) pairs into train/val groups by MGRS tile ID, so every
+    scene from a given tile lands entirely on one side of the split. Upstream's
+    random per-scene split lets the same tile appear in both training/ and
+    validation/ on different dates, which leaks terrain/vegetation signal
+    across the split.
+
+    Returns (train_pairs, val_pairs, train_tiles, val_tiles).
+    """
+    tile_ids = [parse_tile_id_from_filename(inp) for inp, _ in pairs]
+    unparsed = [inp for (inp, _), tile in zip(pairs, tile_ids) if tile is None]
+    if unparsed:
+        raise ValueError(f'Could not parse MGRS tile ID for {len(unparsed)} files, e.g. {unparsed[:3]}')
+
+    splitter = GroupShuffleSplit(n_splits=1, test_size=val_fraction, random_state=seed)
+    indices = np.arange(len(pairs))
+    train_idx, val_idx = next(splitter.split(indices, groups=tile_ids))
+
+    train_pairs = [pairs[i] for i in train_idx]
+    val_pairs   = [pairs[i] for i in val_idx]
+    train_tiles = {tile_ids[i] for i in train_idx}
+    val_tiles   = {tile_ids[i] for i in val_idx}
+
+    overlap = train_tiles & val_tiles
+    assert not overlap, f'Tile leakage after group split: {sorted(overlap)}'
+
+    return train_pairs, val_pairs, train_tiles, val_tiles
 
 
 WEATHER_COLS = [
@@ -58,12 +113,16 @@ class HLSBurnScarsDataset(Dataset):
     """
     Dataset for HLS burn scars tiles with optional weather conditioning.
 
+    `tile_dir_or_pairs` accepts either a directory to scan (legacy, single-dir
+    usage -- still used by predict.py/train_colab.py) or a pre-built list of
+    (input_path, mask_path) pairs, which is what group_split_pairs() produces
+    for callers that pool multiple directories and re-split by tile group.
+
     Input shape:   (6, 1, H, W) -- channels, timestep, height, width
     Mask shape:    (H, W)       -- 0=unburned, 1=burned, -1=nodata
     Weather shape: (5,)         -- normalized weather scalars (if weather_csv provided)
     """
-    def __init__(self, tile_dir, weather_csv=None, augment=False):
-        self.tile_dir    = tile_dir
+    def __init__(self, tile_dir_or_pairs, weather_csv=None, augment=False):
         self.augment     = augment
         self.use_weather = weather_csv is not None
         self.wc_df       = None
@@ -72,15 +131,12 @@ class HLSBurnScarsDataset(Dataset):
             self.wc_df = load_weather_df(weather_csv)
             print(f'Weather data loaded: {len(self.wc_df)} days')
 
-        # Find all input/mask pairs
-        all_inputs = sorted(glob.glob(os.path.join(tile_dir, '*_merged.tif')))
-        self.pairs = []
-        for inp in all_inputs:
-            mask = inp.replace('_merged.tif', '.mask.tif')
-            if os.path.exists(mask):
-                self.pairs.append((inp, mask))
-
-        print(f'Dataset: {len(self.pairs)} valid pairs in {os.path.basename(tile_dir)}')
+        if isinstance(tile_dir_or_pairs, (str, os.PathLike)):
+            self.pairs = find_pairs(tile_dir_or_pairs)
+            print(f'Dataset: {len(self.pairs)} valid pairs in {os.path.basename(str(tile_dir_or_pairs))}')
+        else:
+            self.pairs = list(tile_dir_or_pairs)
+            print(f'Dataset: {len(self.pairs)} valid pairs (pre-split pool)')
 
     def __len__(self):
         return len(self.pairs)
